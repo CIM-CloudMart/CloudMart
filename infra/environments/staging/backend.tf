@@ -2,8 +2,8 @@ terraform {
   backend "s3" {
     bucket         = "cloudmart-tfstate-team-axel"
     key            = "staging/terraform.tfstate"
-    region         = "ap-southeast-1"
-    dynamodb_table = "cloudmart-tfstate-lock"
+    region         = "ap-south-1"
+    use_lockfile   = true
     encrypt        = true
   }
 }
