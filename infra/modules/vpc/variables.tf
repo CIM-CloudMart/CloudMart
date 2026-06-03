@@ -22,3 +22,21 @@ variable "team" {
   description = "Team name"
   type        = string
 }
+
+variable "az_count" {
+  description = "Number of availability zones / subnets to create"
+  type        = number
+  default     = 3
+}
+
+variable "vpc_cidr_prefix" {
+  description = "CIDR prefix length for the VPC (e.g., 16 for /16)"
+  type        = number
+  default     = 16
+}
+
+variable "subnet_prefix_length" {
+  description = "CIDR prefix length for each subnet (e.g., 19)"
+  type        = number
+  default     = 19
+}

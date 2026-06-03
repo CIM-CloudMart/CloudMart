@@ -19,3 +19,21 @@ variable "repository_names" {
     "frontend"
   ]
 }
+
+variable "team" {
+  description = "Team name for tagging"
+  type        = string
+  default     = "team-axel"
+}
+
+variable "owner_email" {
+  description = "Owner email for tagging and notifications"
+  type        = string
+  default     = "admin@cloudmart.example"
+}
+
+variable "kms_key_id" {
+  description = "Optional KMS key id to use for repository encryption (customer-managed). If null, AES256 is used."
+  type        = string
+  default     = null
+}

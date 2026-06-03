@@ -5,6 +5,12 @@ resource "aws_db_subnet_group" "main" {
   subnet_ids = var.private_data_subnet_ids
 }
 
+# If a Secrets Manager secret ARN is provided, read latest secret version for credentials
+data "aws_secretsmanager_secret_version" "db" {
+  count     = var.db_secret_arn != null ? 1 : 0
+  secret_id = var.db_secret_arn
+}
+
 resource "aws_security_group" "rds_sg" {
   name        = "${var.project}-rds-sg-${var.environment}"
   vpc_id      = var.vpc_id
@@ -34,7 +40,7 @@ resource "aws_db_instance" "postgres" {
   identifier     = "${var.project}-postgres-${var.environment}"
   engine         = "postgres"
   engine_version = "16.3"
-  instance_class = var.environment == "prod" ? "db.t3.small" : "db.t3.micro"
+  instance_class = var.environment == "prod" ? "db.t3.medium" : "db.t3.micro"
 
   storage_encrypted = true
   kms_key_id        = var.kms_key_arn
@@ -44,8 +50,10 @@ resource "aws_db_instance" "postgres" {
   multi_az             = var.environment == "prod"
 
   db_name  = "cloudmart"
-  username = "cloudmartadmin"
-  manage_master_user_password = true   # AWS managed password (secure)
+  username = var.db_secret_arn != null ? jsondecode(data.aws_secretsmanager_secret_version.db[0].secret_string)["username"] : var.db_username
+  # If secret is provided, supply password, otherwise let AWS manage it
+  password = var.db_secret_arn != null ? jsondecode(data.aws_secretsmanager_secret_version.db[0].secret_string)["password"] : null
+  manage_master_user_password = var.db_secret_arn == null
 
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
@@ -58,4 +66,10 @@ resource "aws_db_instance" "postgres" {
   final_snapshot_identifier = var.environment == "prod" ? "${var.project}-postgres-final-${var.environment}" : null
 
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
+
+  tags = {
+    Name        = "${var.project}-postgres-${var.environment}"
+    Project     = var.project
+    Environment = var.environment
+  }
 }

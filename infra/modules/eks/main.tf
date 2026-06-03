@@ -15,6 +15,18 @@ module "eks" {
   # Enable IRSA (IAM Roles for Service Accounts) - Mandatory for workload identity
   enable_irsa = true
 
+  # Control API endpoint accessibility
+  cluster_endpoint_public_access  = var.cluster_endpoint_public_access
+  cluster_endpoint_private_access = var.cluster_endpoint_private_access
+
+  # Enable KMS encryption for secrets if provided
+  encryption_config = var.kms_key_id != null ? [
+    {
+      resources        = ["secrets"]
+      provider_key_arn = var.kms_key_id
+    }
+  ] : null
+
   # Node Groups
   eks_managed_node_groups = {
     main = {

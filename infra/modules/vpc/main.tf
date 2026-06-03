@@ -1,56 +1,76 @@
-# ==================== VPC & 3-Tier Networking ====================
+# ==================== VPC & Multi-AZ 3-Tier Networking ====================
+
+data "aws_availability_zones" "available" {
+  state = "available"
+}
 
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
 
-  tags = {
+  tags = merge({
     Name = "${var.project}-vpc-${var.environment}"
-  }
+  }, tomap({
+    Project     = var.project
+    Environment = var.environment
+    Team        = var.team
+  }))
 }
 
 # ==================== Subnets (3-Tier Design) ====================
 
 # Public Subnets
+locals {
+  newbits = var.subnet_prefix_length - var.vpc_cidr_prefix
+}
+
 resource "aws_subnet" "public" {
-  count             = 2
+  count             = var.az_count
   vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index)
-  availability_zone = "${var.region}${element(["a", "b"], count.index)}"
+  cidr_block        = cidrsubnet(var.vpc_cidr, local.newbits, count.index)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
 
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.project}-public-${element(["a", "b"], count.index)}-${var.environment}"
-    Tier = "public"
+    Name        = "${var.project}-public-${count.index + 1}-${var.environment}"
+    Tier        = "public"
+    Project     = var.project
+    Environment = var.environment
+    Team        = var.team
   }
 }
 
 # Private App Subnets (for EKS Worker Nodes)
 resource "aws_subnet" "private_app" {
-  count             = 2
+  count             = var.az_count
   vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 2)
-  availability_zone = "${var.region}${element(["a", "b"], count.index)}"
+  cidr_block        = cidrsubnet(var.vpc_cidr, local.newbits, count.index + var.az_count)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name                              = "${var.project}-private-app-${element(["a", "b"], count.index)}-${var.environment}"
+    Name                              = "${var.project}-private-app-${count.index + 1}-${var.environment}"
     Tier                              = "private-app"
+    Project                           = var.project
+    Environment                       = var.environment
     "kubernetes.io/role/internal-elb" = "1"
   }
 }
 
 # Private Data Subnets (for RDS, DynamoDB endpoints)
 resource "aws_subnet" "private_data" {
-  count             = 2
+  count             = var.az_count
   vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 4)
-  availability_zone = "${var.region}${element(["a", "b"], count.index)}"
+  cidr_block        = cidrsubnet(var.vpc_cidr, local.newbits, count.index + var.az_count * 2)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name = "${var.project}-private-data-${element(["a", "b"], count.index)}-${var.environment}"
-    Tier = "private-data"
+    Name        = "${var.project}-private-data-${count.index + 1}-${var.environment}"
+    Tier        = "private-data"
+    Project     = var.project
+    Environment = var.environment
+    Team        = var.team
   }
 }
 
@@ -65,17 +85,20 @@ resource "aws_internet_gateway" "main" {
 }
 
 resource "aws_eip" "nat" {
-  count  = 1
+  count  = var.az_count
   domain = "vpc"
 }
 
 resource "aws_nat_gateway" "main" {
-  count         = 1
-  allocation_id = aws_eip.nat[0].id
-  subnet_id     = aws_subnet.public[0].id
+  count         = var.az_count
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
 
   tags = {
-    Name = "${var.project}-nat-${var.environment}"
+    Name        = "${var.project}-nat-${count.index + 1}-${var.environment}"
+    Project     = var.project
+    Environment = var.environment
+    Team        = var.team
   }
 }
 
@@ -96,49 +119,57 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route_table_association" "public" {
-  count          = 2
+  count          = var.az_count
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
 # Private App Route Table
 resource "aws_route_table" "private_app" {
+  count  = var.az_count
   vpc_id = aws_vpc.main.id
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[0].id
+    nat_gateway_id = aws_nat_gateway.main[count.index].id
   }
 
   tags = {
-    Name = "${var.project}-private-app-rt-${var.environment}"
+    Name        = "${var.project}-private-app-rt-${count.index + 1}-${var.environment}"
+    Project     = var.project
+    Environment = var.environment
+    Team        = var.team
   }
 }
 
 resource "aws_route_table_association" "private_app" {
-  count          = 2
+  count          = var.az_count
   subnet_id      = aws_subnet.private_app[count.index].id
-  route_table_id = aws_route_table.private_app.id
+  route_table_id = aws_route_table.private_app[count.index].id
 }
 
 # Private Data Route Table (same as private app)
 resource "aws_route_table" "private_data" {
+  count  = var.az_count
   vpc_id = aws_vpc.main.id
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[0].id
+    nat_gateway_id = aws_nat_gateway.main[count.index].id
   }
 
   tags = {
-    Name = "${var.project}-private-data-rt-${var.environment}"
+    Name        = "${var.project}-private-data-rt-${count.index + 1}-${var.environment}"
+    Project     = var.project
+    Environment = var.environment
+    Team        = var.team
   }
 }
 
 resource "aws_route_table_association" "private_data" {
-  count          = 2
+  count          = var.az_count
   subnet_id      = aws_subnet.private_data[count.index].id
-  route_table_id = aws_route_table.private_data.id
+  route_table_id = aws_route_table.private_data[count.index].id
 }
 
 # ==================== VPC Endpoints & Security Groups ====================

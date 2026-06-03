@@ -28,3 +28,15 @@ variable "kms_key_arn" {
   type        = string
 }
 
+variable "db_secret_arn" {
+  description = "Optional ARN of a Secrets Manager secret containing DB credentials (username/password)"
+  type        = string
+  default     = null
+}
+
+variable "db_username" {
+  description = "Fallback DB username if no Secrets Manager secret is provided"
+  type        = string
+  default     = "cloudmartadmin"
+}
+

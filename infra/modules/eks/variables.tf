@@ -32,3 +32,21 @@ variable "team" {
   description = "Team name"
   type        = string
 }
+
+variable "kms_key_id" {
+  description = "Optional KMS key id to encrypt Kubernetes secrets and other cluster resources"
+  type        = string
+  default     = null
+}
+
+variable "cluster_endpoint_public_access" {
+  description = "Whether the EKS API server should be publicly accessible"
+  type        = bool
+  default     = true
+}
+
+variable "cluster_endpoint_private_access" {
+  description = "Whether the EKS API server should be accessible from within the VPC"
+  type        = bool
+  default     = true
+}

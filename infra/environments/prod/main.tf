@@ -15,6 +15,13 @@ module "kms" {
   environment = var.environment
 }
 
+module "secrets_manager" {
+  source      = "../../modules/secrets-manager"
+  project     = var.project
+  environment = var.environment
+  kms_key_id  = module.kms.key_id
+}
+
 module "s3" {
   source      = "../../modules/s3"
   project     = var.project
@@ -27,18 +34,24 @@ module "dynamodb" {
   source      = "../../modules/dynamodb"
   project     = var.project
   environment = var.environment
+  team        = var.team
+  kms_key_arn = module.kms.key_arn
 }
 
 module "ecr" {
   source      = "../../modules/ecr"
   project     = var.project
   environment = var.environment
+  team        = var.team
+  kms_key_id  = module.kms.key_id
 }
 
 module "sqs" {
   source      = "../../modules/sqs"
   project     = var.project
   environment = var.environment
+  team        = var.team
+  kms_key_id  = module.kms.key_id
 }
 
 module "ses" {
@@ -57,6 +70,9 @@ module "eks" {
   node_instance_type     = var.node_instance_type
   desired_node_count     = var.desired_node_count
   team                   = var.team
+  kms_key_id             = module.kms.key_arn
+  cluster_endpoint_public_access  = false
+  cluster_endpoint_private_access = true
 }
 
 module "iam" {
@@ -79,6 +95,7 @@ module "rds" {
   private_data_subnet_ids = module.vpc.private_data_subnet_ids
   eks_node_sg_id          = module.eks.node_security_group_id
   kms_key_arn             = module.kms.key_arn
+  db_secret_arn           = module.secrets_manager.secret_arn
 }
 
 module "waf" {
