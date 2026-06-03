@@ -1,4 +1,12 @@
-# name: cd-prod.yml
-# on:
+name: CD Prod (Temporary)
 
-# jobs:
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy_prod:
+    if: github.ref == 'refs/heads/feat/workflow-container-deployment'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Temporary placeholder
+        run: echo "Temporary manual-only workflow for feat/workflow-container-deployment"
