@@ -26,7 +26,7 @@ variable "team" {
 variable "az_count" {
   description = "Number of availability zones / subnets to create"
   type        = number
-  default     = 3
+  default     = 2
 }
 
 variable "vpc_cidr_prefix" {
@@ -36,7 +36,7 @@ variable "vpc_cidr_prefix" {
 }
 
 variable "subnet_prefix_length" {
-  description = "CIDR prefix length for each subnet (e.g., 19)"
+  description = "CIDR prefix length for each subnet (e.g., 20)"
   type        = number
-  default     = 19
+  default     = 20
 }
