@@ -47,3 +47,8 @@ output "notification_service_role_arn" {
   value       = module.iam.notification_service_role_arn
   description = "IAM Role ARN for notification-service"
 }
+
+output "user_service_role_arn" {
+  value       = module.iam.user_service_role_arn
+  description = "IAM Role ARN for user-service"
+}

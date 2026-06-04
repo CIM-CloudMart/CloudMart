@@ -13,6 +13,9 @@ resource "aws_ecr_repository" "repos" {
     encryption_type = var.kms_key_id != null ? "KMS" : "AES256"
     kms_key         = var.kms_key_id
   }
+  lifecycle {
+    ignore_changes = [encryption_configuration]
+  }
 
   tags = {
     Name        = "${var.project}-${each.key}-${var.environment}"
@@ -33,8 +36,8 @@ resource "aws_ecr_lifecycle_policy" "policy" {
         rulePriority = 1
         description  = "Expire images beyond latest 10"
         selection = {
-          tagStatus  = "any"
-          countType  = "imageCountMoreThan"
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
           countNumber = 10
         }
         action = {

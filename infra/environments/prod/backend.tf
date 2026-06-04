@@ -3,7 +3,7 @@ terraform {
     bucket         = "cloudmart-tfstate-team-axel"
     key            = "prod/terraform.tfstate"
     region         = "ap-south-1"
-    use_lockfile   = true
+    dynamodb_table = "cloudmart-tfstate-lock"
     encrypt        = true
   }
 }

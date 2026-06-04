@@ -19,8 +19,19 @@ resource "aws_security_group" "rds_sg" {
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
-    security_groups = [var.eks_node_sg_id]   # Only allow from EKS nodes
-    description     = "Allow PostgreSQL from EKS worker nodes"
+    security_groups = [var.eks_cluster_sg_id]
+    description     = "Allow PostgreSQL from EKS (Fargate pods or worker nodes)"
+  }
+
+  dynamic "ingress" {
+    for_each = var.bastion_sg_id != null ? [var.bastion_sg_id] : []
+    content {
+      description     = "Allow PostgreSQL from Bastion Host"
+      from_port       = 5432
+      to_port         = 5432
+      protocol        = "tcp"
+      security_groups = [ingress.value]
+    }
   }
 
   egress {
@@ -38,25 +49,25 @@ resource "aws_security_group" "rds_sg" {
 resource "aws_db_instance" "postgres" {
   identifier     = "${var.project}-postgres-${var.environment}"
   engine         = "postgres"
-  engine_version = "16.3"
-  instance_class = var.environment == "prod" ? "db.t3.medium" : "db.t3.micro"
+  engine_version = var.engine_version
+  instance_class = var.instance_class
 
   storage_encrypted = true
   kms_key_id        = var.kms_key_arn
 
-  allocated_storage    = 20
-  max_allocated_storage = 100
-  multi_az             = var.environment == "prod"
+  allocated_storage     = 20
+  max_allocated_storage = var.max_allocated_storage
+  multi_az              = var.multi_az
 
   db_name  = "cloudmart"
   username = jsondecode(data.aws_secretsmanager_secret_version.db.secret_string)["username"]
   password = jsondecode(data.aws_secretsmanager_secret_version.db.secret_string)["password"]
-  manage_master_user_password = false
 
   db_subnet_group_name   = aws_db_subnet_group.main.name
+
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
 
-  backup_retention_period = 7
+  backup_retention_period = var.backup_retention_period
   backup_window           = "03:00-04:00"
   maintenance_window      = "mon:04:00-mon:05:00"
 

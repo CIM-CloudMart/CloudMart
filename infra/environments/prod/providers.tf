@@ -16,6 +16,7 @@ provider "aws" {
       Project     = var.project
       Environment = var.environment
       Team        = var.team
+      Owner       = var.owner_email
       ManagedBy   = "Terraform"
     }
   }

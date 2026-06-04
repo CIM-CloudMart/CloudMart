@@ -30,13 +30,49 @@ variable "vpc_cidr" {
 variable "node_instance_type" {
   description = "Worker node instance type"
   type        = string
-  default     = "t3.medium"
+  default     = "t3.micro"
+}
+
+variable "use_fargate" {
+  description = "Use EKS Fargate (0.25 vCPU per pod) instead of EC2 nodes (2 vCPU each)"
+  type        = bool
+  default     = true
+}
+
+variable "kubernetes_version" {
+  description = "EKS Kubernetes version"
+  type        = string
+  default     = "1.33"
 }
 
 variable "desired_node_count" {
-  description = "Desired number of worker nodes"
+  description = "EC2 worker nodes (only when use_fargate = false)"
   type        = number
-  default     = 2
+  default     = 0
+}
+
+variable "enable_guardduty" {
+  description = "Enable GuardDuty (off by default on free-tier accounts)"
+  type        = bool
+  default     = false
+}
+
+variable "backup_retention_period" {
+  description = "RDS backup days (free tier: max 1)"
+  type        = number
+  default     = 1
+}
+
+variable "owner_email" {
+  description = "Owner email for mandatory cost/ownership tags"
+  type        = string
+  default     = "admin@cloudmart.example"
+}
+
+variable "single_nat_gateway" {
+  description = "Use one shared NAT gateway instead of one per AZ (cost optimization)"
+  type        = bool
+  default     = true
 }
 
 variable "from_email" {
@@ -62,3 +98,28 @@ variable "subscriber_emails" {
   type        = list(string)
   default     = ["admin@cloudmart.example"]
 }
+
+variable "rds_instance_class" {
+  description = "The database instance class"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "rds_multi_az" {
+  description = "Specifies if the RDS instance is Multi-AZ"
+  type        = bool
+  default     = false
+}
+
+variable "rds_max_allocated_storage" {
+  description = "The upper limit for RDS storage autoscaling"
+  type        = number
+  default     = 20
+}
+
+variable "enable_waf" {
+  description = "Enable Web ACL creation (costs ~$25/month, not free-tier eligible)"
+  type        = bool
+  default     = false
+}
+
