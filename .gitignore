@@ -23,3 +23,6 @@
 # Exclude CLI config files
 **/.terraformrc
 **/terraform.rc
+
+cleanup.ps1
+cleanup.sh
