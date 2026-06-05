@@ -40,16 +40,16 @@ async function sendEmail(to, subject, body) {
 
   if (backend === 'ses') {
     // TODO: AWS SES — use @aws-sdk/client-ses
-    // const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
-    // const client = new SESClient({ region: process.env.AWS_REGION });
-    // await client.send(new SendEmailCommand({
-    //   Source: process.env.FROM_EMAIL,
-    //   Destination: { ToAddresses: [to] },
-    //   Message: {
-    //     Subject: { Data: subject },
-    //     Body: { Text: { Data: body } },
-    //   },
-    // }));
+    const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+    const client = new SESClient({ region: process.env.AWS_REGION });
+    await client.send(new SendEmailCommand({
+      Source: process.env.FROM_EMAIL,
+      Destination: { ToAddresses: [to] },
+      Message: {
+        Subject: { Data: subject },
+        Body: { Text: { Data: body } },
+      },
+    }));
     console.log(`[SES] Would send email to ${to}: ${subject}`);
   } else if (backend === 'sendgrid') {
     // TODO: SendGrid (GCP / Azure) — use @sendgrid/mail
