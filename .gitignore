@@ -24,5 +24,7 @@
 **/.terraformrc
 **/terraform.rc
 
+# Excluse .env files
+.env
 cleanup.ps1
 cleanup.sh
