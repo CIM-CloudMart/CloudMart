@@ -51,12 +51,11 @@ resource "aws_db_instance" "postgres" {
   db_name  = "cloudmart"
   username = jsondecode(data.aws_secretsmanager_secret_version.db.secret_string)["username"]
   password = jsondecode(data.aws_secretsmanager_secret_version.db.secret_string)["password"]
-  manage_master_user_password = false
 
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
 
-  backup_retention_period = 7
+  backup_retention_period = 0
   backup_window           = "03:00-04:00"
   maintenance_window      = "mon:04:00-mon:05:00"
 

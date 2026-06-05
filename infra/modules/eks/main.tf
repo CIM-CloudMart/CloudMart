@@ -28,11 +28,12 @@ module "eks" {
   # Node Groups
   eks_managed_node_groups = {
     main = {
-      name           = "main-node-group"
-      instance_types = [var.node_instance_type]
-      min_size       = var.desired_node_count
-      max_size       = var.environment == "prod" ? 5 : 3
-      desired_size   = var.desired_node_count
+      name                 = "main-node-group"
+      instance_types       = [var.node_instance_type]
+      min_size             = var.desired_node_count
+      max_size             = var.environment == "prod" ? 5 : 3
+      desired_size         = var.desired_node_count
+      bootstrap_extra_args = "--use-max-pods false --kubelet-extra-args '--max-pods=110'"
 
       # Required labels for scheduling
       labels = {
