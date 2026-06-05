@@ -5,6 +5,7 @@ metadata:
   labels:
     app: cloudmart
     environment: production
+    network/default-deny: "true"
 ---
 apiVersion: v1
 kind: Namespace
@@ -13,3 +14,4 @@ metadata:
   labels:
     app: cloudmart
     environment: staging
+    network/default-deny: "true"

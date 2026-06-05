@@ -38,4 +38,9 @@ variable "ses_email_identity_arn" {
   type        = string
 }
 
+variable "db_secret_arn" {
+  description = "Secrets Manager ARN for RDS credentials (user-service IRSA)"
+  type        = string
+}
+
 

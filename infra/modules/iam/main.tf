@@ -185,3 +185,51 @@ resource "aws_iam_role_policy" "notification_service" {
   policy = data.aws_iam_policy_document.notification_service_policy.json
 }
 
+# ==================== User Service IAM Role ====================
+
+data "aws_iam_policy_document" "user_service_assume_role" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    effect  = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = ["arn:${local.partition}:iam::${local.account_id}:oidc-provider/${local.oidc_provider}"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider}:sub"
+      values   = ["system:serviceaccount:cloudmart-${var.environment}:user-service-sa"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "user_service" {
+  name               = "${var.project}-user-service-role-${var.environment}"
+  assume_role_policy = data.aws_iam_policy_document.user_service_assume_role.json
+}
+
+data "aws_iam_policy_document" "user_service_policy" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:DescribeSecret"
+    ]
+    resources = [var.db_secret_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "user_service" {
+  name   = "${var.project}-user-service-policy-${var.environment}"
+  role   = aws_iam_role.user_service.id
+  policy = data.aws_iam_policy_document.user_service_policy.json
+}
+

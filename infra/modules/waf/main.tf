@@ -1,6 +1,7 @@
 # ==================== WAF Module ====================
 
 resource "aws_wafv2_web_acl" "main" {
+  count       = var.enable_waf ? 1 : 0
   name        = "${var.project}-waf-web-acl-${var.environment}"
   description = "WAF Web ACL for CloudMart"
   scope       = "REGIONAL"
@@ -8,6 +9,7 @@ resource "aws_wafv2_web_acl" "main" {
   default_action {
     allow {}
   }
+
 
   rule {
     name     = "AWSManagedRulesCommonRuleSet"

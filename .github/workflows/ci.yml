@@ -1,0 +1,12 @@
+name: CI (Temporary)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ci_checks:
+    if: github.ref == 'refs/heads/feat/workflow-container-deployment'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Temporary placeholder
+        run: echo "Temporary manual-only workflow for feat/workflow-container-deployment"

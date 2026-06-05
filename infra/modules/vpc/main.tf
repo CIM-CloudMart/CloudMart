@@ -1,56 +1,85 @@
-# ==================== VPC & 3-Tier Networking ====================
+# ==================== VPC & Multi-AZ 3-Tier Networking ====================
+
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+locals {
+  nat_gateway_count = var.single_nat_gateway ? 1 : var.az_count
+  cluster_name      = coalesce(var.cluster_name, "${var.project}-eks-${var.environment}")
+}
 
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
 
-  tags = {
+  tags = merge({
     Name = "${var.project}-vpc-${var.environment}"
-  }
+    }, tomap({
+      Project     = var.project
+      Environment = var.environment
+      Team        = var.team
+  }))
 }
 
 # ==================== Subnets (3-Tier Design) ====================
 
 # Public Subnets
+locals {
+  newbits = var.subnet_prefix_length - var.vpc_cidr_prefix
+}
+
 resource "aws_subnet" "public" {
-  count             = 2
+  count             = var.az_count
   vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index)
-  availability_zone = "${var.region}${element(["a", "b"], count.index)}"
+  cidr_block        = cidrsubnet(var.vpc_cidr, local.newbits, count.index)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
 
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.project}-public-${element(["a", "b"], count.index)}-${var.environment}"
-    Tier = "public"
+    Name                                          = "${var.project}-public-${count.index + 1}-${var.environment}"
+    Tier                                          = "public"
+    Project                                       = var.project
+    Environment                                   = var.environment
+    Team                                          = var.team
+    "kubernetes.io/role/elb"                      = "1"
+    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
   }
 }
 
 # Private App Subnets (for EKS Worker Nodes)
 resource "aws_subnet" "private_app" {
-  count             = 2
+  count             = var.az_count
   vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 2)
-  availability_zone = "${var.region}${element(["a", "b"], count.index)}"
+  cidr_block        = cidrsubnet(var.vpc_cidr, local.newbits, count.index + var.az_count)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name                              = "${var.project}-private-app-${element(["a", "b"], count.index)}-${var.environment}"
-    Tier                              = "private-app"
-    "kubernetes.io/role/internal-elb" = "1"
+    Name                                          = "${var.project}-private-app-${count.index + 1}-${var.environment}"
+    Tier                                          = "private-app"
+    Project                                       = var.project
+    Environment                                   = var.environment
+    Team                                          = var.team
+    "kubernetes.io/role/internal-elb"             = "1"
+    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
   }
 }
 
 # Private Data Subnets (for RDS, DynamoDB endpoints)
 resource "aws_subnet" "private_data" {
-  count             = 2
+  count             = var.az_count
   vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 4)
-  availability_zone = "${var.region}${element(["a", "b"], count.index)}"
+  cidr_block        = cidrsubnet(var.vpc_cidr, local.newbits, count.index + var.az_count * 2)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name = "${var.project}-private-data-${element(["a", "b"], count.index)}-${var.environment}"
-    Tier = "private-data"
+    Name        = "${var.project}-private-data-${count.index + 1}-${var.environment}"
+    Tier        = "private-data"
+    Project     = var.project
+    Environment = var.environment
+    Team        = var.team
   }
 }
 
@@ -65,17 +94,20 @@ resource "aws_internet_gateway" "main" {
 }
 
 resource "aws_eip" "nat" {
-  count  = 1
+  count  = local.nat_gateway_count
   domain = "vpc"
 }
 
 resource "aws_nat_gateway" "main" {
-  count         = 1
-  allocation_id = aws_eip.nat[0].id
-  subnet_id     = aws_subnet.public[0].id
+  count         = local.nat_gateway_count
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
 
   tags = {
-    Name = "${var.project}-nat-${var.environment}"
+    Name        = "${var.project}-nat-${count.index + 1}-${var.environment}"
+    Project     = var.project
+    Environment = var.environment
+    Team        = var.team
   }
 }
 
@@ -96,49 +128,57 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route_table_association" "public" {
-  count          = 2
+  count          = var.az_count
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
 # Private App Route Table
 resource "aws_route_table" "private_app" {
+  count  = var.az_count
   vpc_id = aws_vpc.main.id
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[0].id
+    nat_gateway_id = aws_nat_gateway.main[var.single_nat_gateway ? 0 : count.index].id
   }
 
   tags = {
-    Name = "${var.project}-private-app-rt-${var.environment}"
+    Name        = "${var.project}-private-app-rt-${count.index + 1}-${var.environment}"
+    Project     = var.project
+    Environment = var.environment
+    Team        = var.team
   }
 }
 
 resource "aws_route_table_association" "private_app" {
-  count          = 2
+  count          = var.az_count
   subnet_id      = aws_subnet.private_app[count.index].id
-  route_table_id = aws_route_table.private_app.id
+  route_table_id = aws_route_table.private_app[count.index].id
 }
 
 # Private Data Route Table (same as private app)
 resource "aws_route_table" "private_data" {
+  count  = var.az_count
   vpc_id = aws_vpc.main.id
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[0].id
+    nat_gateway_id = aws_nat_gateway.main[var.single_nat_gateway ? 0 : count.index].id
   }
 
   tags = {
-    Name = "${var.project}-private-data-rt-${var.environment}"
+    Name        = "${var.project}-private-data-rt-${count.index + 1}-${var.environment}"
+    Project     = var.project
+    Environment = var.environment
+    Team        = var.team
   }
 }
 
 resource "aws_route_table_association" "private_data" {
-  count          = 2
+  count          = var.az_count
   subnet_id      = aws_subnet.private_data[count.index].id
-  route_table_id = aws_route_table.private_data.id
+  route_table_id = aws_route_table.private_data[count.index].id
 }
 
 # ==================== VPC Endpoints & Security Groups ====================
@@ -172,22 +212,23 @@ resource "aws_vpc_endpoint" "dynamodb" {
   vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.${var.region}.dynamodb"
   vpc_endpoint_type = "Gateway"
-  route_table_ids   = [aws_route_table.private_app.id, aws_route_table.private_data.id]
+  route_table_ids   = concat(aws_route_table.private_app[*].id, aws_route_table.private_data[*].id)
 
   tags = {
     Name = "${var.project}-dynamodb-endpoint-${var.environment}"
   }
 }
 
-resource "aws_vpc_endpoint" "sqs" {
-  vpc_id             = aws_vpc.main.id
-  service_name       = "com.amazonaws.${var.region}.sqs"
-  vpc_endpoint_type  = "Interface"
-  subnet_ids         = aws_subnet.private_app[*].id
-  security_group_ids = [aws_security_group.endpoints_sg.id]
+resource "aws_vpc_endpoint" "secretsmanager" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.region}.secretsmanager"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private_app[*].id
+  security_group_ids  = [aws_security_group.endpoints_sg.id]
+  private_dns_enabled = true
 
   tags = {
-    Name = "${var.project}-sqs-endpoint-${var.environment}"
+    Name = "${var.project}-secretsmanager-endpoint-${var.environment}"
   }
 }
 
@@ -195,9 +236,69 @@ resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.${var.region}.s3"
   vpc_endpoint_type = "Gateway"
-  route_table_ids   = [aws_route_table.private_app.id, aws_route_table.private_data.id]
+  route_table_ids   = concat(aws_route_table.private_app[*].id, aws_route_table.private_data[*].id)
 
   tags = {
     Name = "${var.project}-s3-endpoint-${var.environment}"
+  }
+}
+
+# ==================== Bastion Host & Security Group ====================
+
+resource "aws_security_group" "bastion" {
+  name        = "${var.project}-bastion-sg-${var.environment}"
+  description = "Security group for bastion host"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description = "Allow SSH from anywhere"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Allow all egress traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name        = "${var.project}-bastion-sg-${var.environment}"
+    Project     = var.project
+    Environment = var.environment
+  }
+}
+
+data "aws_ami" "amazon_linux_2" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+}
+
+resource "aws_instance" "bastion" {
+  ami                         = data.aws_ami.amazon_linux_2.id
+  instance_type               = "t3.micro"
+  subnet_id                   = aws_subnet.public[0].id
+  vpc_security_group_ids      = [aws_security_group.bastion.id]
+  associate_public_ip_address = true
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required" # IMDSv2 enforced
+    http_put_response_hop_limit = 1
+  }
+
+  tags = {
+    Name        = "${var.project}-bastion-${var.environment}"
+    Project     = var.project
+    Environment = var.environment
   }
 }

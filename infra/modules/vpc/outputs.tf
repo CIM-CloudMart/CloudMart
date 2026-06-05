@@ -22,3 +22,8 @@ output "nat_gateway_ips" {
   description = "Public IPs of the NAT gateways"
   value       = aws_eip.nat[*].public_ip
 }
+
+output "bastion_security_group_id" {
+  description = "The security group ID of the bastion host"
+  value       = aws_security_group.bastion.id
+}

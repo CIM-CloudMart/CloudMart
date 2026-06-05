@@ -1,3 +1,32 @@
-.idea
-infra/bootstrap/.terraform
-infra/bootstrap/.terraform.lock.hcl
+# IDE files
+.idea/
+.vscode/
+
+# Log files
+*.log
+**/*.log
+
+# Terraform local files
+**/.terraform/
+**/.terraform.lock.hcl
+**/*.tfstate
+**/*.tfstate.*
+
+# Crash log files
+**/crash.log
+**/*crash.log
+
+# Exclude override files
+**/*_override.tf
+**/*_override.tf.json
+
+# Exclude CLI config files
+**/.terraformrc
+**/terraform.rc
+
+# Excluse .env files
+.env
+cleanup.ps1
+cleanup.sh
+
+__pycache__

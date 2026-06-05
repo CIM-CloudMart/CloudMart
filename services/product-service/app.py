@@ -13,6 +13,10 @@ import uuid
 import logging
 from datetime import datetime
 from flask import Flask, jsonify, request, abort
+import boto3
+from botocore.exceptions import ClientError
+from decimal import Decimal
+from dotenv import load_dotenv
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -168,65 +172,124 @@ class DynamoDBStore:
     AWS DynamoDB adapter.
 
     To use: set STORE_BACKEND=dynamodb and DYNAMODB_TABLE=<table-name>
-
-    Students: implement each method using boto3.
-    Requires IRSA / workload identity for credentials.
+    Optional: DYNAMODB_ENDPOINT for local Docker instance.
     """
 
     def __init__(self):
-        # TODO: import boto3; create dynamodb resource
-        # self.table = boto3.resource('dynamodb').Table(os.environ['DYNAMODB_TABLE'])
-        raise NotImplementedError(
-            "DynamoDB store not implemented yet. "
-            "See the assignment brief Section 3.3 for guidance."
-        )
+        table_name = os.getenv('DYNAMODB_TABLE')
+        if not table_name:
+            raise ValueError('DYNAMODB_TABLE environment variable is required for DynamoDB backend')
+        endpoint = os.getenv('DYNAMODB_ENDPOINT')
+        if endpoint:
+            self.dynamodb = boto3.resource('dynamodb', endpoint_url=endpoint)
+        else:
+            self.dynamodb = boto3.resource('dynamodb')
+        self.table = self.dynamodb.Table(table_name)
+
+    def _parse_item(self, item):
+        """Convert DynamoDB item to plain dict (handles Decimal)."""
+        import decimal
+        def convert(value):
+            if isinstance(value, decimal.Decimal):
+                return float(value) if value % 1 else int(value)
+            if isinstance(value, dict):
+                return {k: convert(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [convert(v) for v in value]
+            return value
+        return {k: convert(v) for k, v in item.items()}
+
+    def get_all(self, category=None, search=None):
+        response = self.table.scan()
+        items = [self._parse_item(i) for i in response.get('Items', [])]
+        # Apply same filtering logic as InMemoryStore
+        if category:
+            items = [p for p in items if p.get('category') == category]
+        if search:
+            q = search.lower()
+            items = [p for p in items if q in p.get('name', '').lower() or q in p.get('description', '').lower()]
+        return items
+
+    def get_by_id(self, product_id):
+        response = self.table.get_item(Key={'id': product_id})
+        item = response.get('Item')
+        return self._parse_item(item) if item else None
+
+    def create(self, data):
+        product_id = f"prod-{uuid.uuid4().hex[:6]}"
+        product = {
+            'id': product_id,
+            'name': data['name'],
+            'description': data.get('description', ''),
+            # Store price as Decimal to satisfy DynamoDB type requirements
+            'price': Decimal(str(data['price'])),
+            'category': data.get('category', 'general'),
+            'stock': int(data.get('stock', 0)),
+            'imageUrl': data.get('imageUrl', ''),
+            'createdAt': datetime.utcnow().isoformat() + 'Z',
+        }
+        self.table.put_item(Item=product)
+        return product
+
+    def update(self, product_id, data):
+        existing = self.get_by_id(product_id)
+        if not existing:
+            return None
+        # Update fields
+        for key in ['name', 'description', 'price', 'category', 'stock', 'imageUrl']:
+            if key in data:
+                if key == 'price':
+                    existing[key] = Decimal(str(data[key]))
+                else:
+                    existing[key] = data[key]
+        existing['updatedAt'] = datetime.utcnow().isoformat() + 'Z'
+        self.table.put_item(Item=existing)
+        return existing
+
+    def delete(self, product_id):
+        try:
+            self.table.delete_item(Key={'id': product_id})
+            return True
+        except ClientError:
+            return False
+
+    def check_stock(self, product_id, quantity):
+        product = self.get_by_id(product_id)
+        if not product:
+            return False
+        return product.get('stock', 0) >= quantity
+
+    def decrement_stock(self, product_id, quantity):
+        try:
+            # Conditional update to ensure stock is sufficient
+            self.table.update_item(
+                Key={'id': product_id},
+                UpdateExpression='SET stock = stock - :qty',
+                ConditionExpression='stock >= :qty',
+                ExpressionAttributeValues={':qty': quantity},
+            )
+            return True
+        except ClientError as e:
+            # ConditionalCheckFailedException means insufficient stock
+            return False
 
 
-class FirestoreStore:
-    """
-    GCP Firestore adapter.
-
-    To use: set STORE_BACKEND=firestore and FIRESTORE_COLLECTION=<collection-name>
-
-    Students: implement each method using google-cloud-firestore.
-    Requires GCP Workload Identity for credentials.
-    """
-
-    def __init__(self):
-        raise NotImplementedError(
-            "Firestore store not implemented yet. "
-            "See the assignment brief Section 3.3 for guidance."
-        )
+# FirestoreStore removed (not required for this assignment)
 
 
-class CosmosDBStore:
-    """
-    Azure Cosmos DB adapter.
-
-    To use: set STORE_BACKEND=cosmosdb and COSMOSDB_ENDPOINT / COSMOSDB_KEY
-
-    Students: implement each method using azure-cosmos.
-    Requires Azure Workload Identity for credentials.
-    """
-
-    def __init__(self):
-        raise NotImplementedError(
-            "Cosmos DB store not implemented yet. "
-            "See the assignment brief Section 3.3 for guidance."
-        )
+# CosmosDBStore removed (not required for this assignment)
 
 
 def create_store():
-    backend = os.environ.get("STORE_BACKEND", "memory").lower()
+    load_dotenv()
+    backend = os.getenv("STORE_BACKEND", "memory").lower()
     if backend == "dynamodb":
         return DynamoDBStore()
-    elif backend == "firestore":
-        return FirestoreStore()
-    elif backend == "cosmosdb":
-        return CosmosDBStore()
-    else:
-        logger.info("Using in-memory product store (set STORE_BACKEND to use cloud DB)")
+    elif backend == "memory" or not backend:
+        logger.info("Using in-memory product store (set STORE_BACKEND=dynamodb to use DynamoDB backend)")
         return InMemoryStore()
+    else:
+        raise NotImplementedError(f"Store backend '{backend}' is not supported in this implementation.")
 
 
 store = create_store()
@@ -367,6 +430,7 @@ def internal_error(e):
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    load_dotenv()
     port = int(os.environ.get("PORT", 8001))
     debug = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
     logger.info(f"Starting product-service on port {port}")

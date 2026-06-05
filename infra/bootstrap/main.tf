@@ -27,7 +27,7 @@ variable "team" {
 variable "region" {
   description = "AWS region"
   type        = string
-  default     = "ap-southeast-1"
+  default     = "ap-south-1"
 }
 
 # ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
   }
 }

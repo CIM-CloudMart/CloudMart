@@ -1,18 +1,26 @@
 # ==================== CloudMart Production Infrastructure ====================
-
 module "vpc" {
-  source      = "../../modules/vpc"
-  project     = var.project
-  environment = var.environment
-  vpc_cidr    = var.vpc_cidr
-  region      = var.region
-  team        = var.team
+  source             = "../../modules/vpc"
+  project            = var.project
+  environment        = var.environment
+  vpc_cidr           = var.vpc_cidr
+  region             = var.region
+  team               = var.team
+  cluster_name       = "${var.project}-eks-${var.environment}"
+  single_nat_gateway = var.single_nat_gateway
 }
 
 module "kms" {
   source      = "../../modules/kms"
   project     = var.project
   environment = var.environment
+}
+
+module "secrets_manager" {
+  source      = "../../modules/secrets-manager"
+  project     = var.project
+  environment = var.environment
+  kms_key_id  = module.kms.key_id
 }
 
 module "s3" {
@@ -27,18 +35,24 @@ module "dynamodb" {
   source      = "../../modules/dynamodb"
   project     = var.project
   environment = var.environment
+  team        = var.team
+  kms_key_arn = module.kms.key_arn
 }
 
 module "ecr" {
   source      = "../../modules/ecr"
   project     = var.project
   environment = var.environment
+  team        = var.team
+  kms_key_id  = module.kms.key_id
 }
 
 module "sqs" {
   source      = "../../modules/sqs"
   project     = var.project
   environment = var.environment
+  team        = var.team
+  kms_key_id  = null
 }
 
 module "ses" {
@@ -49,14 +63,19 @@ module "ses" {
 }
 
 module "eks" {
-  source                 = "../../modules/eks"
-  project                = var.project
-  environment            = var.environment
-  vpc_id                 = module.vpc.vpc_id
-  private_app_subnet_ids = module.vpc.private_app_subnet_ids
-  node_instance_type     = var.node_instance_type
-  desired_node_count     = var.desired_node_count
-  team                   = var.team
+  source                          = "../../modules/eks"
+  project                         = var.project
+  environment                     = var.environment
+  vpc_id                          = module.vpc.vpc_id
+  private_app_subnet_ids          = module.vpc.private_app_subnet_ids
+  use_fargate                     = var.use_fargate
+  kubernetes_version              = var.kubernetes_version
+  node_instance_type              = var.node_instance_type
+  desired_node_count              = var.desired_node_count
+  team                            = var.team
+  kms_key_id                      = module.kms.key_arn
+  cluster_endpoint_public_access  = false
+  cluster_endpoint_private_access = true
 }
 
 module "iam" {
@@ -69,6 +88,7 @@ module "iam" {
   sqs_queue_arn          = module.sqs.queue_arn
   storage_bucket_arn     = module.s3.bucket_arn
   ses_email_identity_arn = module.ses.ses_email_identity_arn
+  db_secret_arn          = module.secrets_manager.secret_arn
 }
 
 module "rds" {
@@ -77,15 +97,23 @@ module "rds" {
   environment             = var.environment
   vpc_id                  = module.vpc.vpc_id
   private_data_subnet_ids = module.vpc.private_data_subnet_ids
-  eks_node_sg_id          = module.eks.node_security_group_id
+  eks_cluster_sg_id       = module.eks.cluster_security_group_id
   kms_key_arn             = module.kms.key_arn
+  db_secret_arn           = module.secrets_manager.secret_arn
+  instance_class          = var.rds_instance_class
+  multi_az                = var.rds_multi_az
+  max_allocated_storage   = var.rds_max_allocated_storage
+  backup_retention_period = var.backup_retention_period
+  bastion_sg_id           = module.vpc.bastion_security_group_id
 }
 
 module "waf" {
   source      = "../../modules/waf"
   project     = var.project
   environment = var.environment
+  enable_waf  = var.enable_waf
 }
+
 
 module "route53" {
   source      = "../../modules/route53"
@@ -109,8 +137,9 @@ module "monitoring" {
 }
 
 module "security" {
-  source      = "../../modules/security"
-  project     = var.project
-  environment = var.environment
-  vpc_id      = module.vpc.vpc_id
+  source           = "../../modules/security"
+  project          = var.project
+  environment      = var.environment
+  vpc_id           = module.vpc.vpc_id
+  enable_guardduty = var.enable_guardduty
 }
