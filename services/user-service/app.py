@@ -13,10 +13,11 @@ import uuid
 import logging
 from datetime import datetime, timedelta
 from functools import wraps
-
+from dotenv import load_dotenv
 from flask import Flask, jsonify, request, abort
 import bcrypt
 import jwt as pyjwt
+import psycopg2
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -119,15 +120,101 @@ class PostgresUserStore:
     or
       DATABASE_URL (connection string)
 
-    Use psycopg2 or SQLAlchemy. Credentials should come from
-    your cloud provider's secret management service via workload identity.
+
     """
 
     def __init__(self):
-        raise NotImplementedError(
-            "PostgreSQL store not implemented yet. "
-            "See the assignment brief Section 3.1 for guidance."
+        db_url = os.getenv("DATABASE_URL")
+        if db_url:
+            self.conn = psycopg2.connect(db_url)
+        else:
+            host = os.getenv("DB_HOST", "localhost")
+            port = int(os.getenv("DB_PORT", "5432"))
+            dbname = os.getenv("DB_NAME", "cloudmart")
+            user = os.getenv("DB_USER", "postgres")
+            password = os.getenv("DB_PASSWORD", "")
+            self.conn = psycopg2.connect(
+                host=host,
+                port=port,
+                dbname=dbname,
+                user=user,
+                password=password,
+            )
+        self.conn.autocommit = True
+        self.col_map = {
+            "id": "id",
+            "email": "email",
+            "name": "name",
+            "passwordhash": "passwordHash",
+            "role": "role",
+            "address": "address",
+            "createdat": "createdAt",
+            "updatedat": "updatedAt"
+        }
+
+    def _execute(self, query, params=None, fetch=False, many=False):
+        with self.conn.cursor() as cur:
+            cur.execute(query, params)
+
+            if fetch:
+                columns = [self.col_map.get(desc[0], desc[0]) for desc in cur.description]
+                if many:
+                    rows = cur.fetchall()
+                    return [dict(zip(columns, row)) for row in rows]
+                else:
+                    row = cur.fetchone()
+                    return dict(zip(columns, row)) if row else None
+
+            return None
+
+    def find_by_email(self, email):
+        return self._execute(
+            "SELECT * FROM users WHERE email = %s", (email,), fetch=True
         )
+
+    def find_by_id(self, user_id):
+        return self._execute(
+            "SELECT * FROM users WHERE id = %s", (user_id,), fetch=True
+        )
+
+    def create(self, user_data):
+        self._execute(
+            "INSERT INTO users (id, email, name, passwordhash, role, address, createdat) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (
+                user_data["id"],
+                user_data["email"],
+                user_data["name"],
+                user_data["passwordHash"],
+                user_data["role"],
+                user_data.get("address", ""),
+                user_data.get("createdAt", datetime.utcnow().isoformat() + "Z"),
+            ),
+        )
+        return user_data
+
+    def update(self, user_id, data):
+        fields = []
+        params = []
+        for key in ["name", "address", "email"]:
+            if key in data:
+                fields.append(f"{key} = %s")
+                params.append(data[key])
+        if not fields:
+            return None
+        fields.append("updatedat = %s")
+        params.append(datetime.utcnow().isoformat() + "Z")
+        params.append(user_id)
+        set_clause = ", ".join(fields)
+        self._execute(
+            f"UPDATE users SET {set_clause} WHERE id = %s", tuple(params)
+        )
+        return self.find_by_id(user_id)
+
+    def list_all(self):
+        return self._execute("SELECT * FROM users", fetch=True, many=True) or []
+
+
+
 
 
 def create_user_store():
@@ -344,6 +431,7 @@ def internal_error(e):
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    load_dotenv()
     port = int(os.environ.get("PORT", 8003))
     debug = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
     logger.info(f"Starting user-service on port {port}")

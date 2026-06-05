@@ -23,3 +23,6 @@
 # Exclude CLI config files
 **/.terraformrc
 **/terraform.rc
+
+# Excluse .env files
+.env
