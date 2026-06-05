@@ -40,3 +40,15 @@ variable "subnet_prefix_length" {
   type        = number
   default     = 20
 }
+
+variable "cluster_name" {
+  description = "EKS cluster name for Kubernetes subnet discovery tags"
+  type        = string
+  default     = null
+}
+
+variable "single_nat_gateway" {
+  description = "Use one NAT gateway for all private subnets (cost optimization)"
+  type        = bool
+  default     = true
+}

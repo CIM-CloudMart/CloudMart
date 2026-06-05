@@ -18,8 +18,8 @@ variable "private_data_subnet_ids" {
   type        = list(string)
 }
 
-variable "eks_node_sg_id" {
-  description = "Security group ID of EKS nodes"
+variable "eks_cluster_sg_id" {
+  description = "EKS cluster security group ID (Fargate pods or worker nodes)"
   type        = string
 }
 
@@ -40,3 +40,40 @@ variable "db_username" {
   default     = "cloudmartadmin"
 }
 
+variable "instance_class" {
+  description = "The database instance class"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "multi_az" {
+  description = "Specifies if the RDS instance is Multi-AZ"
+  type        = bool
+  default     = false
+}
+
+variable "max_allocated_storage" {
+  description = "The upper limit for RDS storage autoscaling"
+  type        = number
+  default     = 20
+}
+
+variable "engine_version" {
+  description = "PostgreSQL engine version"
+  type        = string
+  default     = "16.9"
+}
+
+variable "backup_retention_period" {
+  description = "RDS backup retention days (free tier accounts: use 0 or 1)"
+  type        = number
+  default     = 1
+}
+
+
+
+variable "bastion_sg_id" {
+  description = "The security group ID of the bastion host to allow database access"
+  type        = string
+  default     = null
+}

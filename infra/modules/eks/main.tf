@@ -1,41 +1,60 @@
-# EKS Cluster + Node Groups (Skeleton Module)
+# EKS Cluster — Fargate-first for free tier / low vCPU quota
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 21.0"
 
   name               = "${var.project}-eks-${var.environment}"
-  kubernetes_version = "1.30"
+  kubernetes_version = var.kubernetes_version
 
   vpc_id     = var.vpc_id
   subnet_ids = var.private_app_subnet_ids
 
-  # Cluster IAM Role
+  force_update_version = false
+
   iam_role_name = "${var.project}-eks-cluster-role-${var.environment}"
 
-  # Control API endpoint accessibility
   endpoint_public_access  = var.cluster_endpoint_public_access
   endpoint_private_access = var.cluster_endpoint_private_access
 
-  # KMS Key Management
   create_kms_key = false
 
-  # Enable KMS encryption for secrets if provided
   encryption_config = {
     resources        = ["secrets"]
     provider_key_arn = var.kms_key_id
   }
 
-  # Node Groups
-  eks_managed_node_groups = {
-    main = {
-      name                 = "main-node-group"
-      instance_types       = [var.node_instance_type]
-      min_size             = var.desired_node_count
-      max_size             = var.environment == "prod" ? 5 : 3
-      desired_size         = var.desired_node_count
-      bootstrap_extra_args = "--use-max-pods false --kubelet-extra-args '--max-pods=110'"
+  # Fargate: 0.25 vCPU minimum per pod — does not consume EC2 Standard vCPU quota
+  fargate_profiles = var.use_fargate ? {
+    kube_system = {
+      name = "kube-system"
+      selectors = [
+        { namespace = "kube-system" }
+      ]
+    }
+    cloudmart = {
+      name = "cloudmart"
+      selectors = [
+        { namespace = "cloudmart-${var.environment}" }
+      ]
+    }
+  } : {}
 
-      # Required labels for scheduling
+  eks_managed_node_groups = var.use_fargate ? {} : {
+    main = {
+      name            = "main"
+      use_name_prefix = false
+      instance_types  = [var.node_instance_type]
+      min_size        = var.desired_node_count
+      max_size        = var.desired_node_count
+      desired_size    = var.desired_node_count
+      capacity_type   = "ON_DEMAND"
+
+      metadata_options = {
+        http_endpoint               = "enabled"
+        http_tokens                 = "required"
+        http_put_response_hop_limit = 2
+      }
+
       labels = {
         Environment = var.environment
         Project     = var.project
@@ -43,10 +62,16 @@ module "eks" {
     }
   }
 
-  # Cluster addons
-  addons = {
-    coredns = {}
+  addons = var.use_fargate ? {
+    coredns = {
+      most_recent = true
+      configuration_values = jsonencode({
+        computeType = "Fargate"
+      })
+    }
+    } : {
+    coredns    = {}
     kube-proxy = {}
-    vpc-cni = {}
+    vpc-cni    = {}
   }
 }
