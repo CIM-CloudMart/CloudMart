@@ -1,0 +1,115 @@
+name: CD Deploy
+
+on:
+  workflow_run:
+    workflows: ["Build and Push to ECR"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy (staging/production)'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    name: GitOps & EKS Deploy
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          # Fetch all history to allow committing back
+          fetch-depth: 0
+          # Use default token for push authorization
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set Environment Context
+        id: context
+        run: |
+          TRIGGER_EVENT="${{ github.event_name }}"
+          if [ "$TRIGGER_EVENT" = "workflow_dispatch" ]; then
+            ENV="${{ inputs.environment }}"
+            COMMIT_SHA="${{ github.sha }}"
+            BRANCH="${{ github.ref_name }}"
+          else
+            BRANCH="${{ github.event.workflow_run.head_branch }}"
+            COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
+            if [ "$BRANCH" = "main" ]; then
+              ENV="production"
+            else
+              ENV="staging"
+            fi
+          fi
+          
+          if [ "$ENV" = "production" ]; then
+            echo "env=production" >> $GITHUB_OUTPUT
+            echo "values_file=helm-charts/values-prod.yaml" >> $GITHUB_OUTPUT
+            echo "cluster_name=cloudmart-eks-prod" >> $GITHUB_OUTPUT
+            echo "namespace=cloudmart-prod" >> $GITHUB_OUTPUT
+          else
+            echo "env=staging" >> $GITHUB_OUTPUT
+            echo "values_file=helm-charts/values-staging.yaml" >> $GITHUB_OUTPUT
+            echo "cluster_name=cloudmart-eks-staging" >> $GITHUB_OUTPUT
+            echo "namespace=cloudmart-staging" >> $GITHUB_OUTPUT
+          fi
+          echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Update Helm Tags (GitOps)
+        run: |
+          VALUES_FILE="${{ steps.context.outputs.values_file }}"
+          COMMIT_SHA="${{ steps.context.outputs.commit_sha }}"
+          
+          # Update the tag node for each service
+          yq -i ".notification.image.tag = \"$COMMIT_SHA\"" $VALUES_FILE
+          yq -i ".order.image.tag = \"$COMMIT_SHA\"" $VALUES_FILE
+          yq -i ".product.image.tag = \"$COMMIT_SHA\"" $VALUES_FILE
+          yq -i ".user.image.tag = \"$COMMIT_SHA\"" $VALUES_FILE
+          
+          # Commit the updated values back to the repository
+          if git diff --quiet $VALUES_FILE; then
+            echo "No changes in Helm tags. Skipping commit."
+          else
+            echo "Commiting Helm tag changes back to Git..."
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git add $VALUES_FILE
+            git commit -m "chore: update Helm tags to $COMMIT_SHA [skip ci]"
+            # Rebase to prevent push failures due to remote modifications
+            git pull --rebase origin ${{ steps.context.outputs.branch }}
+            git push origin ${{ steps.context.outputs.branch }}
+          fi
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Update Kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ steps.context.outputs.cluster_name }} --region ap-south-1
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Deploy Helm Chart to EKS
+        run: |
+          helm upgrade --install cloudmart ./helm-charts \
+            --namespace ${{ steps.context.outputs.namespace }} \
+            --create-namespace \
+            -f ./helm-charts/values.yaml \
+            -f ${{ steps.context.outputs.values_file }}
