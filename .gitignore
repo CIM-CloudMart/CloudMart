@@ -24,6 +24,11 @@
 **/.terraformrc
 **/terraform.rc
 
+cleanup.ps1
+cleanup.sh
+deploy-ecr.ps1
+deploy-ecr.sh
+
 # Excluse .env files
 .env
 cleanup.ps1
