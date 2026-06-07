@@ -85,18 +85,19 @@ jobs:
             frontend) HELM_KEY="frontend" ;;
           esac
           
-          # ECR Repository name pattern matching Terraform modules/ecr/main.tf
-          ECR_REPOSITORY="cloudmart-${SERVICE}-${ENV}"
-          IMAGE_URI="${REGISTRY}/${ECR_REPOSITORY}"
-          
           if [ "$ENV" = "production" ]; then
-            echo "cluster_name=cloudmart-eks-prod" >> $GITHUB_OUTPUT
-            echo "namespace=cloudmart-prod" >> $GITHUB_OUTPUT
+            ENV_SHORT="prod"
           else
-            echo "cluster_name=cloudmart-eks-staging" >> $GITHUB_OUTPUT
-            echo "namespace=cloudmart-staging" >> $GITHUB_OUTPUT
+            ENV_SHORT="staging"
           fi
           
+          # ECR Repository name pattern matching Terraform modules/ecr/main.tf
+          ECR_REPOSITORY="cloudmart-${SERVICE}-${ENV_SHORT}"
+          IMAGE_URI="${REGISTRY}/${ECR_REPOSITORY}"
+          
+          echo "cluster_name=cloudmart-eks-${ENV_SHORT}" >> $GITHUB_OUTPUT
+          echo "namespace=cloudmart-${ENV_SHORT}" >> $GITHUB_OUTPUT
+          echo "file_env=${ENV_SHORT}" >> $GITHUB_OUTPUT
           echo "helm_key=$HELM_KEY" >> $GITHUB_OUTPUT
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
           echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
@@ -127,6 +128,7 @@ jobs:
             --namespace ${{ steps.envs.outputs.namespace }} \
             --create-namespace \
             -f ./helm-charts/values.yaml \
-            -f ./helm-charts/values-${{ inputs.environment }}.yaml \
+            -f ./helm-charts/values-${{ steps.envs.outputs.file_env }}.yaml \
             --set ${{ steps.envs.outputs.helm_key }}.image.repository=${{ steps.envs.outputs.image_uri }} \
-            --set ${{ steps.envs.outputs.helm_key }}.image.tag=${{ steps.envs.outputs.short_sha }}
+            --set ${{ steps.envs.outputs.helm_key }}.image.tag=${{ steps.envs.outputs.short_sha }} \
+            --set global.registry=""

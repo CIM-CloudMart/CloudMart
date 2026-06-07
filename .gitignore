@@ -24,14 +24,10 @@
 **/.terraformrc
 **/terraform.rc
 
-cleanup.ps1
-cleanup.sh
-deploy-ecr.ps1
-deploy-ecr.sh
+cleanup_resources.ps1
+cleanup_resources.sh
 
 # Excluse .env files
 .env
-cleanup.ps1
-cleanup.sh
 
 __pycache__

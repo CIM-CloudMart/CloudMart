@@ -77,3 +77,9 @@ variable "bastion_sg_id" {
   type        = string
   default     = null
 }
+
+variable "db_password" {
+  description = "The database password"
+  type        = string
+  sensitive   = true
+}

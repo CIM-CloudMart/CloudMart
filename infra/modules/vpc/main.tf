@@ -197,10 +197,11 @@ resource "aws_security_group" "endpoints_sg" {
   }
 
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTPS only within the VPC"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
   tags = {
@@ -250,13 +251,8 @@ resource "aws_security_group" "bastion" {
   description = "Security group for bastion host"
   vpc_id      = aws_vpc.main.id
 
-  ingress {
-    description = "Allow SSH from anywhere"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # Ingress is empty since we are using AWS Systems Manager (SSM) Session Manager for shell access.
+  # No public port 22 is exposed to the internet.
 
   egress {
     description = "Allow all egress traffic"
@@ -271,6 +267,33 @@ resource "aws_security_group" "bastion" {
     Project     = var.project
     Environment = var.environment
   }
+}
+
+resource "aws_iam_role" "bastion" {
+  name = "${var.project}-bastion-role-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "bastion_ssm" {
+  role       = aws_iam_role.bastion.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "bastion" {
+  name = "${var.project}-bastion-profile-${var.environment}"
+  role = aws_iam_role.bastion.name
 }
 
 data "aws_ami" "amazon_linux_2" {
@@ -289,6 +312,7 @@ resource "aws_instance" "bastion" {
   subnet_id                   = aws_subnet.public[0].id
   vpc_security_group_ids      = [aws_security_group.bastion.id]
   associate_public_ip_address = true
+  iam_instance_profile        = aws_iam_instance_profile.bastion.name
 
   metadata_options {
     http_endpoint               = "enabled"

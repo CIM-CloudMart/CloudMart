@@ -74,7 +74,7 @@ module "eks" {
   desired_node_count              = var.desired_node_count
   team                            = var.team
   kms_key_id                      = module.kms.key_arn
-  cluster_endpoint_public_access  = false
+  cluster_endpoint_public_access  = true
   cluster_endpoint_private_access = true
 }
 
@@ -89,6 +89,7 @@ module "iam" {
   storage_bucket_arn     = module.s3.bucket_arn
   ses_email_identity_arn = module.ses.ses_email_identity_arn
   db_secret_arn          = module.secrets_manager.secret_arn
+  jwt_secret_arn         = module.secrets_manager.jwt_secret_arn
 }
 
 module "rds" {
@@ -100,6 +101,8 @@ module "rds" {
   eks_cluster_sg_id       = module.eks.cluster_security_group_id
   kms_key_arn             = module.kms.key_arn
   db_secret_arn           = module.secrets_manager.secret_arn
+  db_password             = module.secrets_manager.db_password
+  db_username             = module.secrets_manager.db_username
   instance_class          = var.rds_instance_class
   multi_az                = var.rds_multi_az
   max_allocated_storage   = var.rds_max_allocated_storage

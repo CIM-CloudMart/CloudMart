@@ -223,7 +223,10 @@ data "aws_iam_policy_document" "user_service_policy" {
       "secretsmanager:GetSecretValue",
       "secretsmanager:DescribeSecret"
     ]
-    resources = [var.db_secret_arn]
+    resources = [
+      var.db_secret_arn,
+      var.jwt_secret_arn
+    ]
   }
 }
 
