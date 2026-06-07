@@ -1,0 +1,10 @@
+environment                 = "staging"
+region                      = "ap-south-1"
+kubernetes_version          = "1.33"
+use_fargate                 = true
+desired_node_count          = 0
+node_instance_type          = "t3.micro"
+team                        = "team-axel"
+single_nat_gateway          = true
+enable_guardduty            = false
+backup_retention_period = 1

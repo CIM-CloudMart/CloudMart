@@ -1,4 +1,5 @@
-# ==================== CloudMart Production Infrastructure ====================
+# ==================== CloudMart Staging Infrastructure ====================
+
 module "vpc" {
   source             = "../../modules/vpc"
   project            = var.project
@@ -74,7 +75,7 @@ module "eks" {
   desired_node_count              = var.desired_node_count
   team                            = var.team
   kms_key_id                      = module.kms.key_arn
-  cluster_endpoint_public_access  = false
+  cluster_endpoint_public_access  = true
   cluster_endpoint_private_access = true
 }
 
