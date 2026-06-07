@@ -22,3 +22,13 @@ output "uses_fargate" {
   description = "Whether the cluster uses Fargate instead of EC2 node groups"
   value       = var.use_fargate
 }
+
+output "cluster_endpoint" {
+  description = "EKS Cluster API endpoint"
+  value       = module.eks.cluster_endpoint
+}
+
+output "cluster_certificate_authority_data" {
+  description = "EKS Cluster CA certificate data"
+  value       = module.eks.cluster_certificate_authority_data
+}
