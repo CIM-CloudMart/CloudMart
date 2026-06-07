@@ -43,4 +43,9 @@ variable "db_secret_arn" {
   type        = string
 }
 
+variable "jwt_secret_arn" {
+  description = "Secrets Manager ARN for JWT Secret (user-service IRSA)"
+  type        = string
+}
+
 

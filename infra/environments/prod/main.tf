@@ -23,6 +23,29 @@ module "secrets_manager" {
   kms_key_id  = module.kms.key_id
 }
 
+# Add JWT Secret Generation and Storage
+resource "random_password" "jwt_secret" {
+  length           = 64
+  special          = true
+  override_special = "-_"
+}
+
+resource "aws_secretsmanager_secret" "jwt" {
+  name        = "${var.project}-jwt-secret-${var.environment}"
+  description = "JWT Secret for ${var.project} (${var.environment})"
+  kms_key_id  = module.kms.key_id
+
+  tags = {
+    Project     = var.project
+    Environment = var.environment
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "jwt" {
+  secret_id     = aws_secretsmanager_secret.jwt.id
+  secret_string = random_password.jwt_secret.result
+}
+
 module "s3" {
   source      = "../../modules/s3"
   project     = var.project
@@ -89,6 +112,7 @@ module "iam" {
   storage_bucket_arn     = module.s3.bucket_arn
   ses_email_identity_arn = module.ses.ses_email_identity_arn
   db_secret_arn          = module.secrets_manager.secret_arn
+  jwt_secret_arn         = aws_secretsmanager_secret.jwt.arn
 }
 
 module "rds" {
