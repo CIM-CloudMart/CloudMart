@@ -91,6 +91,7 @@ module "iam" {
   ses_email_identity_arn = module.ses.ses_email_identity_arn
   db_secret_arn          = module.secrets_manager.secret_arn
   jwt_secret_arn         = module.secrets_manager.jwt_secret_arn
+  kms_key_arn            = module.kms.key_arn
 }
 
 module "rds" {

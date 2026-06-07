@@ -37,6 +37,12 @@ module "eks" {
         { namespace = "cloudmart-${var.environment}" }
       ]
     }
+    external_secrets = {
+      name = "external-secrets"
+      selectors = [
+        { namespace = "external-secrets" }
+      ]
+    }
   } : {}
 
   eks_managed_node_groups = var.use_fargate ? {} : {
@@ -73,5 +79,20 @@ module "eks" {
     coredns    = {}
     kube-proxy = {}
     vpc-cni    = {}
+  }
+
+  access_entries = {
+    admin = {
+      kubernetes_groups = []
+      principal_arn     = "arn:aws:iam::779417963796:user/Dinuka"
+      policy_associations = {
+        admin = {
+          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = {
+            type = "cluster"
+          }
+        }
+      }
+    }
   }
 }

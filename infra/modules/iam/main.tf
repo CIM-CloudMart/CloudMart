@@ -69,6 +69,15 @@ data "aws_iam_policy_document" "product_service_policy" {
       "${var.storage_bucket_arn}/*"
     ]
   }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "kms:Decrypt",
+      "kms:DescribeKey"
+    ]
+    resources = [var.kms_key_arn]
+  }
 }
 
 resource "aws_iam_role_policy" "product_service" {
@@ -227,6 +236,15 @@ data "aws_iam_policy_document" "user_service_policy" {
       var.db_secret_arn,
       var.jwt_secret_arn
     ]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "kms:Decrypt",
+      "kms:DescribeKey"
+    ]
+    resources = [var.kms_key_arn]
   }
 }
 

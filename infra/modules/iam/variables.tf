@@ -48,4 +48,8 @@ variable "jwt_secret_arn" {
   type        = string
 }
 
+variable "kms_key_arn" {
+  description = "KMS key ARN used for encryption/decryption of Secrets Manager secrets"
+  type        = string
+}
 
