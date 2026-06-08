@@ -48,7 +48,7 @@ jobs:
       - name: Checkout Helm Charts
         uses: actions/checkout@v4
         with:
-          repository: dinukamalitha/helm-charts
+          repository: CIM-CloudMart/helm-charts
           path: helm-charts
           token: ${{ secrets.HELM_CHARTS_PAT || secrets.GITHUB_TOKEN }}
 
