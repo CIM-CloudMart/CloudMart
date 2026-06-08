@@ -95,16 +95,27 @@ module "iam" {
   region                 = var.region
 }
 
+data "aws_caller_identity" "current" {}
+
+locals {
+  github_actions_roles = [
+    module.iam.github_actions_role_arn,
+    "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/ci-cd"
+  ]
+}
+
 resource "aws_eks_access_entry" "github_actions" {
+  for_each          = toset(local.github_actions_roles)
   cluster_name      = module.eks.cluster_name
-  principal_arn     = module.iam.github_actions_role_arn
+  principal_arn     = each.value
   kubernetes_groups = []
 }
 
 resource "aws_eks_access_policy_association" "github_actions" {
+  for_each      = toset(local.github_actions_roles)
   cluster_name  = module.eks.cluster_name
   policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-  principal_arn = module.iam.github_actions_role_arn
+  principal_arn = each.value
 
   access_scope {
     type = "cluster"
