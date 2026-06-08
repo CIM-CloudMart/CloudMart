@@ -7,9 +7,8 @@ on:
     branches: ["**"]
 
 permissions:
-  id-token: write
   contents: read
-  security-events: write   # needed to upload SARIF to GitHub Security tab
+  security-events: write
 
 jobs:
   trivy-scan:
@@ -52,19 +51,21 @@ jobs:
           path: sbom.json
 
   secret-scan:
-    name: Secret Scan (Gitleaks)
+    name: Secret Scan (TruffleHog)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # full history so gitleaks can scan all commits
+          fetch-depth: 0
 
-      - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}  # only needed for orgs, free for public repos
+      - name: Run TruffleHog (free, no license needed)
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
 
   dependency-audit:
     name: Dependency Audit
@@ -86,34 +87,27 @@ jobs:
       - name: Install pip-audit
         run: pip install pip-audit --quiet
 
-      - name: Audit frontend (npm)
-        working-directory: frontend
+      # Node.js services
+      - name: Audit frontend
+        working-directory: services/frontend
         run: npm audit --audit-level=critical
-        continue-on-error: false
-
-      - name: Audit user-service (npm or pip)
-        working-directory: user-service
-        run: |
-          if [ -f package.json ]; then npm audit --audit-level=critical; fi
-          if [ -f requirements.txt ]; then pip-audit -r requirements.txt; fi
-
-      - name: Audit product-service
-        working-directory: product-service
-        run: |
-          if [ -f package.json ]; then npm audit --audit-level=critical; fi
-          if [ -f requirements.txt ]; then pip-audit -r requirements.txt; fi
 
       - name: Audit order-service
-        working-directory: order-service
-        run: |
-          if [ -f package.json ]; then npm audit --audit-level=critical; fi
-          if [ -f requirements.txt ]; then pip-audit -r requirements.txt; fi
+        working-directory: services/order-service
+        run: npm audit --audit-level=critical
 
       - name: Audit notification-service
-        working-directory: notification-service
-        run: |
-          if [ -f package.json ]; then npm audit --audit-level=critical; fi
-          if [ -f requirements.txt ]; then pip-audit -r requirements.txt; fi
+        working-directory: services/notification-service
+        run: npm audit --audit-level=critical
+
+      # Python services
+      - name: Audit product-service
+        working-directory: services/product-service
+        run: pip-audit -r requirements.txt
+
+      - name: Audit user-service
+        working-directory: services/user-service
+        run: pip-audit -r requirements.txt
 
   scan-summary:
     name: Scan Summary
@@ -123,13 +117,13 @@ jobs:
     steps:
       - name: Check all scan results
         run: |
-          echo "Trivy: ${{ needs.trivy-scan.result }}"
+          echo "Trivy:   ${{ needs.trivy-scan.result }}"
           echo "Secrets: ${{ needs.secret-scan.result }}"
-          echo "Deps: ${{ needs.dependency-audit.result }}"
+          echo "Deps:    ${{ needs.dependency-audit.result }}"
           if [[ "${{ needs.trivy-scan.result }}" == "failure" || \
                 "${{ needs.secret-scan.result }}" == "failure" || \
                 "${{ needs.dependency-audit.result }}" == "failure" ]]; then
-            echo "One or more security scans failed. Blocking."
+            echo "One or more security scans failed."
             exit 1
           fi
           echo "All scans passed."
