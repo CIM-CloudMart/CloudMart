@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Binaries
+.bin/
+
+# Build output
+dist/
+
+# Coverage reports
+coverage/
+
+# Logs
+*.log
+logs/
+
+# TypeScript
+*.tsbuildinfo
