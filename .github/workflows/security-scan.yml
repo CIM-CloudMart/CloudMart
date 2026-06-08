@@ -1,142 +1,135 @@
 name: Security & Vulnerability Scan
 
 on:
-  workflow_dispatch:
-    inputs:
-      service:
-        description: 'Microservice to scan'
-        required: true
-        type: choice
-        options:
-          - frontend
-          - user-service
-          - product-service
-          - order-service
-          - notification-service
-      environment:
-        description: 'Target Environment'
-        required: true
-        type: choice
-        options:
-          - staging
-          - production
-      image_tag:
-        description: 'Image tag to scan (e.g. latest, amd64, or short-sha)'
-        required: true
-        default: 'latest'
-  schedule:
-    # Run every Sunday at midnight UTC
-    - cron: '0 0 * * 0'
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
 
 permissions:
   id-token: write
   contents: read
+  security-events: write   # needed to upload SARIF to GitHub Security tab
 
 jobs:
-  # Job for manual single service scan
-  manual-scan:
-    name: Manual Image Scan
-    if: github.event_name == 'workflow_dispatch'
+  trivy-scan:
+    name: Trivy Repository Scan
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ap-south-1
-
-      - name: Log in to AWS ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Set Image URI
-        id: image-setup
-        run: |
-          ENV_SHORT="${{ inputs.environment == 'production' && 'prod' || 'staging' }}"
-          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/cloudmart-${{ inputs.service }}-${ENV_SHORT}"
-          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
-
-      - name: Run Trivy vulnerability scanner
+      - name: Run Trivy filesystem scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ steps.image-setup.outputs.image_uri }}:${{ inputs.image_tag }}
-          format: 'table'
-          severity: 'CRITICAL'
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
           exit-code: '1'
 
+      - name: Upload Trivy SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
       - name: Generate SBOM
+        if: always()
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ steps.image-setup.outputs.image_uri }}:${{ inputs.image_tag }}
+          scan-type: 'fs'
+          scan-ref: '.'
           format: 'cyclonedx'
           output: 'sbom.json'
 
-      - name: Upload SBOM Artifact
+      - name: Upload SBOM artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sbom-${{ inputs.service }}-${{ inputs.environment }}
+          name: sbom-${{ github.sha }}
           path: sbom.json
 
-  # Job for scheduled scan of all microservices in staging and production
-  scheduled-scan:
-    name: Scheduled Matrix Scan
-    if: github.event_name == 'schedule'
+  secret-scan:
+    name: Secret Scan (Gitleaks)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        service: [frontend, user-service, product-service, order-service, notification-service]
-        environment: [staging, production]
     steps:
-      - name: Checkout Code
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so gitleaks can scan all commits
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}  # only needed for orgs, free for public repos
+
+  dependency-audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ap-south-1
+          node-version: '20'
 
-      - name: Log in to AWS ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-      - name: Set Image URI & Tag
-        id: image-setup
+      - name: Install pip-audit
+        run: pip install pip-audit --quiet
+
+      - name: Audit frontend (npm)
+        working-directory: frontend
+        run: npm audit --audit-level=critical
+        continue-on-error: false
+
+      - name: Audit user-service (npm or pip)
+        working-directory: user-service
         run: |
-          ENV_SHORT="${{ matrix.environment == 'production' && 'prod' || 'staging' }}"
-          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/cloudmart-${{ matrix.service }}-${ENV_SHORT}"
-          
-          # Staging microservices use 'amd64' except frontend which uses git SHA
-          # Production and staging frontend use latest / version tags. Default to latest.
-          TAG="latest"
-          if [ "${{ matrix.environment }}" = "staging" ] && [ "${{ matrix.service }}" != "frontend" ]; then
-            TAG="amd64"
+          if [ -f package.json ]; then npm audit --audit-level=critical; fi
+          if [ -f requirements.txt ]; then pip-audit -r requirements.txt; fi
+
+      - name: Audit product-service
+        working-directory: product-service
+        run: |
+          if [ -f package.json ]; then npm audit --audit-level=critical; fi
+          if [ -f requirements.txt ]; then pip-audit -r requirements.txt; fi
+
+      - name: Audit order-service
+        working-directory: order-service
+        run: |
+          if [ -f package.json ]; then npm audit --audit-level=critical; fi
+          if [ -f requirements.txt ]; then pip-audit -r requirements.txt; fi
+
+      - name: Audit notification-service
+        working-directory: notification-service
+        run: |
+          if [ -f package.json ]; then npm audit --audit-level=critical; fi
+          if [ -f requirements.txt ]; then pip-audit -r requirements.txt; fi
+
+  scan-summary:
+    name: Scan Summary
+    runs-on: ubuntu-latest
+    needs: [trivy-scan, secret-scan, dependency-audit]
+    if: always()
+    steps:
+      - name: Check all scan results
+        run: |
+          echo "Trivy: ${{ needs.trivy-scan.result }}"
+          echo "Secrets: ${{ needs.secret-scan.result }}"
+          echo "Deps: ${{ needs.dependency-audit.result }}"
+          if [[ "${{ needs.trivy-scan.result }}" == "failure" || \
+                "${{ needs.secret-scan.result }}" == "failure" || \
+                "${{ needs.dependency-audit.result }}" == "failure" ]]; then
+            echo "One or more security scans failed. Blocking."
+            exit 1
           fi
-          
-          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ steps.image-setup.outputs.image_uri }}:${{ steps.image-setup.outputs.tag }}
-          format: 'table'
-          severity: 'CRITICAL'
-          exit-code: '0' # Don't block during periodic check, just report
-
-      - name: Generate SBOM
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ steps.image-setup.outputs.image_uri }}:${{ steps.image-setup.outputs.tag }}
-          format: 'cyclonedx'
-          output: 'sbom-${{ matrix.service }}-${{ matrix.environment }}.json'
-
-      - name: Upload SBOM Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom-${{ matrix.service }}-${{ matrix.environment }}-scheduled
-          path: sbom-${{ matrix.service }}-${{ matrix.environment }}.json
+          echo "All scans passed."
