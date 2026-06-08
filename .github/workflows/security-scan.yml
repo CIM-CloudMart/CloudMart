@@ -1,0 +1,142 @@
+name: Security & Vulnerability Scan
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Microservice to scan'
+        required: true
+        type: choice
+        options:
+          - frontend
+          - user-service
+          - product-service
+          - order-service
+          - notification-service
+      environment:
+        description: 'Target Environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      image_tag:
+        description: 'Image tag to scan (e.g. latest, amd64, or short-sha)'
+        required: true
+        default: 'latest'
+  schedule:
+    # Run every Sunday at midnight UTC
+    - cron: '0 0 * * 0'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  # Job for manual single service scan
+  manual-scan:
+    name: Manual Image Scan
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+
+      - name: Log in to AWS ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set Image URI
+        id: image-setup
+        run: |
+          ENV_SHORT="${{ inputs.environment == 'production' && 'prod' || 'staging' }}"
+          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/cloudmart-${{ inputs.service }}-${ENV_SHORT}"
+          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.image-setup.outputs.image_uri }}:${{ inputs.image_tag }}
+          format: 'table'
+          severity: 'CRITICAL'
+          exit-code: '1'
+
+      - name: Generate SBOM
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.image-setup.outputs.image_uri }}:${{ inputs.image_tag }}
+          format: 'cyclonedx'
+          output: 'sbom.json'
+
+      - name: Upload SBOM Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ inputs.service }}-${{ inputs.environment }}
+          path: sbom.json
+
+  # Job for scheduled scan of all microservices in staging and production
+  scheduled-scan:
+    name: Scheduled Matrix Scan
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [frontend, user-service, product-service, order-service, notification-service]
+        environment: [staging, production]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+
+      - name: Log in to AWS ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set Image URI & Tag
+        id: image-setup
+        run: |
+          ENV_SHORT="${{ matrix.environment == 'production' && 'prod' || 'staging' }}"
+          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/cloudmart-${{ matrix.service }}-${ENV_SHORT}"
+          
+          # Staging microservices use 'amd64' except frontend which uses git SHA
+          # Production and staging frontend use latest / version tags. Default to latest.
+          TAG="latest"
+          if [ "${{ matrix.environment }}" = "staging" ] && [ "${{ matrix.service }}" != "frontend" ]; then
+            TAG="amd64"
+          fi
+          
+          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.image-setup.outputs.image_uri }}:${{ steps.image-setup.outputs.tag }}
+          format: 'table'
+          severity: 'CRITICAL'
+          exit-code: '0' # Don't block during periodic check, just report
+
+      - name: Generate SBOM
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.image-setup.outputs.image_uri }}:${{ steps.image-setup.outputs.tag }}
+          format: 'cyclonedx'
+          output: 'sbom-${{ matrix.service }}-${{ matrix.environment }}.json'
+
+      - name: Upload SBOM Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.service }}-${{ matrix.environment }}-scheduled
+          path: sbom-${{ matrix.service }}-${{ matrix.environment }}.json

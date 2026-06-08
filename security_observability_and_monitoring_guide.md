@@ -158,8 +158,8 @@ We provision the following CloudWatch Alarms linked to the SNS Topic (`cloudmart
 
 Our GitHub Actions pipeline (`deploy.yml`) is secured via the following policies:
 *   **GitHub OIDC Authentication**: Long-lived AWS access keys are eliminated. GitHub Actions federates with AWS STS using OIDC token validation, assuming the IAM role dynamically.
-*   **Image Security Scanning**: Trivy scanner executes on every build, scanning the container image. The pipeline will fail on detection of any `CRITICAL` vulnerability.
-*   **SBOM Generation**: Trivy generates a CycloneDX Software Bill of Materials (SBOM) uploaded as a workflow run artifact (`sbom-*.json`).
+*   **Image Security Scanning**: Trivy scanner executes in a separate dedicated security workflow (`security-scan.yml`), allowing scanning of container images in staging or production.
+*   **SBOM Generation**: CycloneDX Software Bill of Materials (SBOM) are generated during the security scan and uploaded as a workflow run artifact (`sbom-*.json`).
 *   **Environment Approval Gates**: Deployment jobs are bound to GitHub Environments (`staging` and `production`), enforcing manual approval rules for production.
 *   **Dynamic WAF Association**: The pipeline dynamically queries WAF regional Web ACL ARNs using the AWS CLI and updates the Helm deployment override annotations automatically.
 
