@@ -18,3 +18,16 @@ variable "enable_guardduty" {
   type        = bool
   default     = false
 }
+
+variable "subscriber_emails" {
+  description = "Emails to subscribe to security alarms"
+  type        = list(string)
+  default     = ["admin@cloudmart.example"]
+}
+
+variable "enable_security_hub" {
+  description = "Enable AWS Security Hub"
+  type        = bool
+  default     = false
+}
+

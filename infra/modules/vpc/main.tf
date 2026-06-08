@@ -326,3 +326,109 @@ resource "aws_instance" "bastion" {
     Environment = var.environment
   }
 }
+
+# ==================== VPC Flow Logs & Observability ====================
+
+resource "aws_cloudwatch_log_group" "vpc_flow_log" {
+  name              = "/aws/vpc-flow-log/${var.project}-${var.environment}"
+  retention_in_days = 7
+
+  tags = {
+    Project     = var.project
+    Environment = var.environment
+    Team        = var.team
+  }
+}
+
+resource "aws_iam_role" "vpc_flow_log" {
+  name = "${var.project}-vpc-flow-log-role-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "vpc-flow-logs.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Project     = var.project
+    Environment = var.environment
+    Team        = var.team
+  }
+}
+
+resource "aws_iam_role_policy" "vpc_flow_log" {
+  name = "${var.project}-vpc-flow-log-policy-${var.environment}"
+  role = aws_iam_role.vpc_flow_log.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_flow_log" "main" {
+  iam_role_arn    = aws_iam_role.vpc_flow_log.arn
+  log_destination = aws_cloudwatch_log_group.vpc_flow_log.arn
+  traffic_type    = "ALL"
+  vpc_id          = aws_vpc.main.id
+
+  tags = {
+    Name        = "${var.project}-vpc-flow-logs-${var.environment}"
+    Project     = var.project
+    Environment = var.environment
+    Team        = var.team
+  }
+}
+
+# Metric filter to track rejected traffic in Flow Logs
+resource "aws_cloudwatch_log_metric_filter" "vpc_rejected" {
+  name           = "${var.project}-vpc-rejected-packets-${var.environment}"
+  pattern        = "[version, account_id, interface_id, srcaddr, dstaddr, srcport, dstport, protocol, packets, bytes, start, end, action=\"REJECT\", log_status]"
+  log_group_name = aws_cloudwatch_log_group.vpc_flow_log.name
+
+  metric_transformation {
+    name      = "RejectedPackets"
+    namespace = "VPCFlowLogs"
+    value     = "1"
+  }
+}
+
+# Alarm triggered if rejected packets count is high
+resource "aws_cloudwatch_metric_alarm" "vpc_rejected_alarm" {
+  count               = var.sns_topic_arn != null ? 1 : 0
+  alarm_name          = "${var.project}-vpc-high-rejected-packets-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "RejectedPackets"
+  namespace           = "VPCFlowLogs"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 100
+  alarm_description   = "This alarm monitors high rate of rejected packets in the VPC."
+  alarm_actions       = [var.sns_topic_arn]
+
+  tags = {
+    Project     = var.project
+    Environment = var.environment
+    Team        = var.team
+  }
+}
+

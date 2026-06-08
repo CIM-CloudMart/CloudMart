@@ -52,3 +52,10 @@ variable "single_nat_gateway" {
   type        = bool
   default     = true
 }
+
+variable "sns_topic_arn" {
+  description = "SNS topic ARN to send rejected packets alerts to"
+  type        = string
+  default     = null
+}
+

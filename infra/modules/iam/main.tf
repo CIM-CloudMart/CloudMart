@@ -44,8 +44,6 @@ data "aws_iam_policy_document" "product_service_policy" {
   statement {
     effect = "Allow"
     actions = [
-      "dynamodb:BatchGetItem",
-      "dynamodb:BatchWriteItem",
       "dynamodb:GetItem",
       "dynamodb:PutItem",
       "dynamodb:UpdateItem",
@@ -55,6 +53,7 @@ data "aws_iam_policy_document" "product_service_policy" {
     ]
     resources = [var.dynamodb_table_arn]
   }
+
 
   statement {
     effect = "Allow"

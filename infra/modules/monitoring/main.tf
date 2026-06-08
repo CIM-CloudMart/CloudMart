@@ -15,6 +15,119 @@ resource "aws_cloudwatch_log_group" "service_logs" {
   }
 }
 
+data "aws_region" "current" {}
+
+# ==================== Application Alerting & Metrics ====================
+
+resource "aws_sns_topic" "alerts" {
+  name = "${var.project}-alerts-${var.environment}"
+
+  tags = {
+    Project     = var.project
+    Environment = var.environment
+  }
+}
+
+resource "aws_sns_topic_subscription" "alerts_email" {
+  count     = length(var.subscriber_emails) > 0 ? 1 : 0
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = var.subscriber_emails[0]
+}
+
+# Metric filter to track requests
+resource "aws_cloudwatch_log_metric_filter" "product_service_requests" {
+  name           = "${var.project}-product-requests-${var.environment}"
+  pattern        = ""
+  log_group_name = aws_cloudwatch_log_group.service_logs["product-service"].name
+
+  metric_transformation {
+    name      = "RequestCount"
+    namespace = "CloudMart/product-service"
+    value     = "1"
+  }
+}
+
+# Metric filter to track errors
+resource "aws_cloudwatch_log_metric_filter" "product_service_errors" {
+  name           = "${var.project}-product-errors-${var.environment}"
+  pattern        = "ERROR"
+  log_group_name = aws_cloudwatch_log_group.service_logs["product-service"].name
+
+  metric_transformation {
+    name      = "ErrorCount"
+    namespace = "CloudMart/product-service"
+    value     = "1"
+  }
+}
+
+# Alarm for product service error rate
+resource "aws_cloudwatch_metric_alarm" "product_service_high_error_rate" {
+  alarm_name          = "${var.project}-product-service-high-error-rate-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  threshold           = 5
+  alarm_description   = "Alarm when product-service error rate exceeds 5% over 5 minutes"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  metric_query {
+    id          = "error_rate"
+    expression  = "errors / requests * 100"
+    label       = "Error Rate (%)"
+    return_data = true
+  }
+
+  metric_query {
+    id = "errors"
+    metric {
+      metric_name = "ErrorCount"
+      namespace   = "CloudMart/product-service"
+      period      = 300
+      stat        = "Sum"
+    }
+  }
+
+  metric_query {
+    id = "requests"
+    metric {
+      metric_name = "RequestCount"
+      namespace   = "CloudMart/product-service"
+      period      = 300
+      stat        = "Sum"
+    }
+  }
+
+  tags = {
+    Project     = var.project
+    Environment = var.environment
+  }
+}
+
+# Alarm for SQS queue depth
+resource "aws_cloudwatch_metric_alarm" "sqs_queue_depth" {
+  alarm_name          = "${var.project}-sqs-queue-depth-high-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 300
+  statistic           = "Maximum"
+  threshold           = 100
+  alarm_description   = "Alarm when SQS queue depth exceeds 100 messages for 5 minutes"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  dimensions = {
+    QueueName = var.sqs_queue_name
+  }
+
+  tags = {
+    Project     = var.project
+    Environment = var.environment
+  }
+}
+
+# ==================== CloudWatch Dashboard ====================
+
 resource "aws_cloudwatch_dashboard" "main" {
   dashboard_name = "${var.project}-dashboard-${var.environment}"
   dashboard_body = jsonencode({
@@ -26,7 +139,132 @@ resource "aws_cloudwatch_dashboard" "main" {
         width  = 24
         height = 2
         properties = {
-          markdown = "# ${var.project} - ${var.environment}"
+          markdown = "# 🛒 CloudMart - ${upper(var.environment)} Operations Dashboard"
+        }
+      },
+      {
+        type   = "metric"
+        x      = 0
+        y      = 2
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            [ "ContainerInsights", "pod_cpu_utilization", "ClusterName", "cloudmart-eks-${var.environment}", "Namespace", "cloudmart-${var.environment}" ]
+          ],
+          period = 300,
+          stat   = "Average",
+          region = data.aws_region.current.name,
+          title  = "Pod CPU Utilization (%)"
+        }
+      },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 2
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            [ "ContainerInsights", "pod_memory_utilization", "ClusterName", "cloudmart-eks-${var.environment}", "Namespace", "cloudmart-${var.environment}" ]
+          ],
+          period = 300,
+          stat   = "Average",
+          region = data.aws_region.current.name,
+          title  = "Pod Memory Utilization (%)"
+        }
+      },
+      {
+        type   = "metric"
+        x      = 0
+        y      = 8
+        width  = 8
+        height = 6
+        properties = {
+          metrics = [
+            [ "AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", var.sqs_queue_name ]
+          ],
+          period = 300,
+          stat   = "Maximum",
+          region = data.aws_region.current.name,
+          title  = "SQS Queue Depth (Order Events)"
+        }
+      },
+      {
+        type   = "metric"
+        x      = 8
+        y      = 8
+        width  = 8
+        height = 6
+        properties = {
+          metrics = [
+            [ "AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "cloudmart-postgres-${var.environment}" ]
+          ],
+          period = 300,
+          stat   = "Average",
+          region = data.aws_region.current.name,
+          title  = "RDS Database Connections"
+        }
+      },
+      {
+        type   = "metric"
+        x      = 16
+        y      = 8
+        width  = 8
+        height = 6
+        properties = {
+          metrics = [
+            [ "AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "cloudmart-products-${var.environment}" ],
+            [ "AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "cloudmart-products-${var.environment}" ]
+          ],
+          period = 300,
+          stat   = "Sum",
+          region = data.aws_region.current.name,
+          title  = "DynamoDB Consumed Throughput"
+        }
+      },
+      {
+        type   = "metric"
+        x      = 0
+        y      = 14
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            [ "CloudMart", "orders_processed_total", "Environment", var.environment, "Service", "order-service" ]
+          ],
+          period = 300,
+          stat   = "Sum",
+          region = data.aws_region.current.name,
+          title  = "Orders Processed (Custom EMF Metric)"
+        }
+      },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 14
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            [ "CloudMart/product-service", "ErrorCount", "Environment", var.environment ]
+          ],
+          period = 300,
+          stat   = "Sum",
+          region = data.aws_region.current.name,
+          title  = "Product Service Errors (Metric Filter)"
+        }
+      },
+      {
+        type   = "log"
+        x      = 0
+        y      = 20
+        width  = 24
+        height = 6
+        properties = {
+          query  = "SOURCE '/aws/vpc-flow-log/cloudmart-${var.environment}' | filter action = 'REJECT' | stats count(*) by srcAddr, dstAddr, dstPort | sort count(*) desc | limit 20",
+          region = data.aws_region.current.name,
+          title  = "Rejected VPC Flow Logs (Top Sources & Ports)"
         }
       }
     ]
@@ -34,5 +272,6 @@ resource "aws_cloudwatch_dashboard" "main" {
 
   depends_on = [aws_cloudwatch_log_group.service_logs]
 }
+
 
 # Alarms and more detailed dashboards should be added per service integration
