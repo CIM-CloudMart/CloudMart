@@ -1,15 +1,15 @@
 output "vpc_id" {
-  value       = module.vpc.vpc_id
+  value       = data.aws_vpc.prod.id
   description = "The ID of the VPC"
 }
 
 output "eks_cluster_name" {
-  value       = module.eks.cluster_name
+  value       = data.aws_eks_cluster.prod.name
   description = "EKS Cluster Name"
 }
 
 output "eks_oidc_provider_url" {
-  value       = module.eks.oidc_provider_url
+  value       = data.aws_eks_cluster.prod.identity[0].oidc[0].issuer
   description = "EKS OIDC Provider URL"
 }
 

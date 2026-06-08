@@ -18,7 +18,7 @@ module "eks" {
 
   create_kms_key = false
 
-  cluster_enabled_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+  enabled_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 
 
   encryption_config = {
@@ -78,16 +78,10 @@ module "eks" {
         computeType = "Fargate"
       })
     }
-    aws-cloudwatch-observability = {
-      most_recent = true
-    }
     } : {
     coredns                      = {}
     kube-proxy                   = {}
     vpc-cni                      = {}
-    aws-cloudwatch-observability = {
-      most_recent = true
-    }
   }
 
   access_entries = {

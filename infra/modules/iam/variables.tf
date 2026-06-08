@@ -58,3 +58,9 @@ variable "region" {
   type        = string
 }
 
+variable "kubernetes_namespace" {
+  description = "Target Kubernetes namespace for IRSA trust relationship"
+  type        = string
+  default     = ""
+}
+

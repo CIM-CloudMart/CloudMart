@@ -84,6 +84,7 @@ module "iam" {
   environment            = var.environment
   cluster_name           = module.eks.cluster_name
   oidc_url               = module.eks.oidc_provider_url
+  kubernetes_namespace   = "production"
   dynamodb_table_arn     = module.dynamodb.dynamodb_table_arn
   sqs_queue_arn          = module.sqs.queue_arn
   storage_bucket_arn     = module.s3.bucket_arn
@@ -97,21 +98,22 @@ module "iam" {
 data "aws_caller_identity" "current" {}
 
 locals {
-  github_actions_roles = [
-    module.iam.github_actions_role_arn,
-    "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/ci-cd"
-  ]
+  github_actions_roles = {
+    prod    = module.iam.github_actions_role_arn
+    staging = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/cloudmart-github-actions-role-staging"
+    cicd    = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/ci-cd"
+  }
 }
 
 resource "aws_eks_access_entry" "github_actions" {
-  for_each          = toset(local.github_actions_roles)
+  for_each          = local.github_actions_roles
   cluster_name      = module.eks.cluster_name
   principal_arn     = each.value
   kubernetes_groups = []
 }
 
 resource "aws_eks_access_policy_association" "github_actions" {
-  for_each      = toset(local.github_actions_roles)
+  for_each      = local.github_actions_roles
   cluster_name  = module.eks.cluster_name
   policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
   principal_arn = each.value
@@ -120,6 +122,7 @@ resource "aws_eks_access_policy_association" "github_actions" {
     type = "cluster"
   }
 }
+
 
 module "rds" {
   source                  = "../../modules/rds"
@@ -163,10 +166,13 @@ module "budget" {
 }
 
 module "monitoring" {
-  source      = "../../modules/monitoring"
-  project     = var.project
-  environment = var.environment
+  source            = "../../modules/monitoring"
+  project           = var.project
+  environment       = var.environment
+  sqs_queue_name    = module.sqs.queue_name
+  subscriber_emails = var.subscriber_emails
 }
+
 
 module "security" {
   source              = "../../modules/security"
@@ -174,7 +180,7 @@ module "security" {
   environment         = var.environment
   vpc_id              = module.vpc.vpc_id
   enable_guardduty    = var.enable_guardduty
-  enable_security_hub = true
+  enable_security_hub = false
 }
 
 
@@ -217,3 +223,22 @@ resource "helm_release" "aws_load_balancer_controller" {
 
   depends_on = [module.eks, module.iam]
 }
+
+resource "kubernetes_namespace" "staging" {
+  metadata {
+    name = "staging"
+    labels = {
+      environment = "staging"
+    }
+  }
+}
+
+resource "kubernetes_namespace" "production" {
+  metadata {
+    name = "production"
+    labels = {
+      environment = "production"
+    }
+  }
+}
+

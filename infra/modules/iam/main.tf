@@ -7,6 +7,7 @@ locals {
   oidc_provider = replace(var.oidc_url, "https://", "")
   account_id    = data.aws_caller_identity.current.account_id
   partition     = data.aws_partition.current.partition
+  k8s_namespace = var.kubernetes_namespace != "" ? var.kubernetes_namespace : "cloudmart-${var.environment}"
 }
 
 # ==================== Product Service IAM Role ====================
@@ -24,7 +25,7 @@ data "aws_iam_policy_document" "product_service_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_provider}:sub"
-      values   = ["system:serviceaccount:cloudmart-${var.environment}:product-service-sa"]
+      values   = ["system:serviceaccount:${local.k8s_namespace}:product-service-sa"]
     }
 
     condition {
@@ -100,7 +101,7 @@ data "aws_iam_policy_document" "order_service_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_provider}:sub"
-      values   = ["system:serviceaccount:cloudmart-${var.environment}:order-service-sa"]
+      values   = ["system:serviceaccount:${local.k8s_namespace}:order-service-sa"]
     }
 
     condition {
@@ -150,7 +151,7 @@ data "aws_iam_policy_document" "notification_service_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_provider}:sub"
-      values   = ["system:serviceaccount:cloudmart-${var.environment}:notification-service-sa"]
+      values   = ["system:serviceaccount:${local.k8s_namespace}:notification-service-sa"]
     }
 
     condition {
@@ -209,7 +210,7 @@ data "aws_iam_policy_document" "user_service_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_provider}:sub"
-      values   = ["system:serviceaccount:cloudmart-${var.environment}:user-service-sa"]
+      values   = ["system:serviceaccount:${local.k8s_namespace}:user-service-sa"]
     }
 
     condition {
@@ -360,7 +361,7 @@ data "aws_iam_policy_document" "github_actions_policy" {
     actions = [
       "eks:DescribeCluster"
     ]
-    resources = ["arn:${local.partition}:eks:${var.region}:${local.account_id}:cluster/${var.project}-eks-${var.environment}"]
+    resources = ["arn:${local.partition}:eks:${var.region}:${local.account_id}:cluster/${var.cluster_name}"]
   }
 
   statement {

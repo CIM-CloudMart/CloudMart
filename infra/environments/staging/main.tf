@@ -1,14 +1,47 @@
 # ==================== CloudMart Staging Infrastructure ====================
 
-module "vpc" {
-  source             = "../../modules/vpc"
-  project            = var.project
-  environment        = var.environment
-  vpc_cidr           = var.vpc_cidr
-  region             = var.region
-  team               = var.team
-  cluster_name       = "${var.project}-eks-${var.environment}"
-  single_nat_gateway = var.single_nat_gateway
+data "aws_vpc" "prod" {
+  filter {
+    name   = "tag:Name"
+    values = ["cloudmart-vpc-prod"]
+  }
+}
+
+data "aws_subnets" "prod_private_app" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.prod.id]
+  }
+  filter {
+    name   = "tag:Tier"
+    values = ["private-app"]
+  }
+}
+
+data "aws_subnets" "prod_private_data" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.prod.id]
+  }
+  filter {
+    name   = "tag:Tier"
+    values = ["private-data"]
+  }
+}
+
+data "aws_security_group" "prod_bastion" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.prod.id]
+  }
+  filter {
+    name   = "tag:Name"
+    values = ["cloudmart-bastion-sg-prod"]
+  }
+}
+
+data "aws_eks_cluster" "prod" {
+  name = "cloudmart-eks-prod"
 }
 
 module "kms" {
@@ -63,28 +96,13 @@ module "ses" {
   from_email  = var.from_email
 }
 
-module "eks" {
-  source                          = "../../modules/eks"
-  project                         = var.project
-  environment                     = var.environment
-  vpc_id                          = module.vpc.vpc_id
-  private_app_subnet_ids          = module.vpc.private_app_subnet_ids
-  use_fargate                     = var.use_fargate
-  kubernetes_version              = var.kubernetes_version
-  node_instance_type              = var.node_instance_type
-  desired_node_count              = var.desired_node_count
-  team                            = var.team
-  kms_key_id                      = module.kms.key_arn
-  cluster_endpoint_public_access  = true
-  cluster_endpoint_private_access = true
-}
-
 module "iam" {
   source                 = "../../modules/iam"
   project                = var.project
   environment            = var.environment
-  cluster_name           = module.eks.cluster_name
-  oidc_url               = module.eks.oidc_provider_url
+  cluster_name           = data.aws_eks_cluster.prod.name
+  oidc_url               = data.aws_eks_cluster.prod.identity[0].oidc[0].issuer
+  kubernetes_namespace   = "staging"
   dynamodb_table_arn     = module.dynamodb.dynamodb_table_arn
   sqs_queue_arn          = module.sqs.queue_arn
   storage_bucket_arn     = module.s3.bucket_arn
@@ -95,40 +113,13 @@ module "iam" {
   region                 = var.region
 }
 
-data "aws_caller_identity" "current" {}
-
-locals {
-  github_actions_roles = [
-    module.iam.github_actions_role_arn,
-    "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/ci-cd"
-  ]
-}
-
-resource "aws_eks_access_entry" "github_actions" {
-  for_each          = toset(local.github_actions_roles)
-  cluster_name      = module.eks.cluster_name
-  principal_arn     = each.value
-  kubernetes_groups = []
-}
-
-resource "aws_eks_access_policy_association" "github_actions" {
-  for_each      = toset(local.github_actions_roles)
-  cluster_name  = module.eks.cluster_name
-  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-  principal_arn = each.value
-
-  access_scope {
-    type = "cluster"
-  }
-}
-
 module "rds" {
   source                  = "../../modules/rds"
   project                 = var.project
   environment             = var.environment
-  vpc_id                  = module.vpc.vpc_id
-  private_data_subnet_ids = module.vpc.private_data_subnet_ids
-  eks_cluster_sg_id       = module.eks.cluster_security_group_id
+  vpc_id                  = data.aws_vpc.prod.id
+  private_data_subnet_ids = data.aws_subnets.prod_private_data.ids
+  eks_cluster_sg_id       = data.aws_eks_cluster.prod.vpc_config[0].cluster_security_group_id
   kms_key_arn             = module.kms.key_arn
   db_secret_arn           = module.secrets_manager.secret_arn
   db_password             = module.secrets_manager.db_password
@@ -137,7 +128,7 @@ module "rds" {
   multi_az                = var.rds_multi_az
   max_allocated_storage   = var.rds_max_allocated_storage
   backup_retention_period = var.backup_retention_period
-  bastion_sg_id           = module.vpc.bastion_security_group_id
+  bastion_sg_id           = data.aws_security_group.prod_bastion.id
 }
 
 module "waf" {
@@ -146,7 +137,6 @@ module "waf" {
   environment = var.environment
   enable_waf  = var.enable_waf
 }
-
 
 module "route53" {
   source      = "../../modules/route53"
@@ -164,57 +154,19 @@ module "budget" {
 }
 
 module "monitoring" {
-  source      = "../../modules/monitoring"
-  project     = var.project
-  environment = var.environment
+  source            = "../../modules/monitoring"
+  project           = var.project
+  environment       = var.environment
+  sqs_queue_name    = module.sqs.queue_name
+  subscriber_emails = var.subscriber_emails
 }
+
 
 module "security" {
   source              = "../../modules/security"
   project             = var.project
   environment         = var.environment
-  vpc_id              = module.vpc.vpc_id
+  vpc_id              = data.aws_vpc.prod.id
   enable_guardduty    = var.enable_guardduty
-  enable_security_hub = true
-}
-
-
-resource "helm_release" "aws_load_balancer_controller" {
-  name       = "aws-load-balancer-controller"
-  repository = "https://aws.github.io/eks-charts"
-  chart      = "aws-load-balancer-controller"
-  namespace  = "kube-system"
-  version    = "1.7.2"
-
-  set {
-    name  = "clusterName"
-    value = module.eks.cluster_name
-  }
-
-  set {
-    name  = "serviceAccount.create"
-    value = "true"
-  }
-
-  set {
-    name  = "serviceAccount.name"
-    value = "aws-load-balancer-controller"
-  }
-
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = module.iam.aws_load_balancer_controller_role_arn
-  }
-
-  set {
-    name  = "region"
-    value = var.region
-  }
-
-  set {
-    name  = "vpcId"
-    value = module.vpc.vpc_id
-  }
-
-  depends_on = [module.eks, module.iam]
+  enable_security_hub = false
 }
