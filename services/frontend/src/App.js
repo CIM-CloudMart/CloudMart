@@ -5,16 +5,16 @@ import React, { useState, useEffect, useCallback } from 'react';
 // ---------------------------------------------------------------------------
 const API = {
   products: process.env.REACT_APP_PRODUCT_URL || '/api/products',
-  orders:   process.env.REACT_APP_ORDER_URL   || '/api/orders',
-  auth:     process.env.REACT_APP_USER_URL    || '/api/auth',
-  users:    process.env.REACT_APP_USER_URL    || '/api/users',
+  orders: process.env.REACT_APP_ORDER_URL || '/api/orders',
+  auth: process.env.REACT_APP_USER_URL || '/api/auth',
+  users: process.env.REACT_APP_USER_URL || '/api/users',
 };
 
 // ---------------------------------------------------------------------------
 // Styles (inline — students can extract to CSS files)
 // ---------------------------------------------------------------------------
 const styles = {
-  app: { minHeight: '100vh', background: '#f5f5f5' },
+  app: { minHeight: '100vh', background: '#03bfc5ff' },
   header: {
     background: '#1a1a2e', color: '#fff', padding: '16px 32px',
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
