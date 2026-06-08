@@ -91,6 +91,23 @@ module "iam" {
   db_secret_arn          = module.secrets_manager.secret_arn
   jwt_secret_arn         = module.secrets_manager.jwt_secret_arn
   kms_key_arn            = module.kms.key_arn
+  region                 = var.region
+}
+
+resource "aws_eks_access_entry" "github_actions" {
+  cluster_name      = module.eks.cluster_name
+  principal_arn     = module.iam.github_actions_role_arn
+  kubernetes_groups = []
+}
+
+resource "aws_eks_access_policy_association" "github_actions" {
+  cluster_name  = module.eks.cluster_name
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  principal_arn = module.iam.github_actions_role_arn
+
+  access_scope {
+    type = "cluster"
+  }
 }
 
 module "rds" {
@@ -141,12 +158,14 @@ module "monitoring" {
 }
 
 module "security" {
-  source           = "../../modules/security"
-  project          = var.project
-  environment      = var.environment
-  vpc_id           = module.vpc.vpc_id
-  enable_guardduty = var.enable_guardduty
+  source              = "../../modules/security"
+  project             = var.project
+  environment         = var.environment
+  vpc_id              = module.vpc.vpc_id
+  enable_guardduty    = var.enable_guardduty
+  enable_security_hub = true
 }
+
 
 resource "helm_release" "aws_load_balancer_controller" {
   name       = "aws-load-balancer-controller"

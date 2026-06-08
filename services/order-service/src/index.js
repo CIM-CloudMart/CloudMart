@@ -19,7 +19,12 @@ const morgan = require('morgan');
 const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
 
+const AWSXRay = require('aws-xray-sdk');
+AWSXRay.captureHTTPsGlobal(require('http'));
+AWSXRay.captureHTTPsGlobal(require('https'));
+
 const app = express();
+app.use(AWSXRay.express.openSegment('order-service'));
 const PORT = process.env.PORT || 8002;
 
 // Service discovery — product-service URL
@@ -72,7 +77,9 @@ async function publishOrderEvent(event) {
   if (backend === 'sqs') {
     try {
       const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
-      const client = new SQSClient({ region: process.env.AWS_REGION || 'ap-south-1' });
+      const { captureAWSv3Client } = require('aws-xray-sdk');
+      let client = new SQSClient({ region: process.env.AWS_REGION || 'ap-south-1' });
+      client = captureAWSv3Client(client);
       await client.send(new SendMessageCommand({
         QueueUrl: process.env.SQS_QUEUE_URL,
         MessageBody: JSON.stringify(event),
@@ -237,6 +244,31 @@ app.post('/orders', async (req, res) => {
       timestamp: order.createdAt,
     });
 
+    // Publish custom metric using AWS Embedded Metric Format (EMF) to stdout
+    console.log(JSON.stringify({
+      "_aws": {
+        "Timestamp": Date.now(),
+        "CloudWatchMetrics": [
+          {
+            "Namespace": "CloudMart",
+            "Dimensions": [["Environment", "Service"]],
+            "Metrics": [
+              {
+                "Name": "orders_processed_total",
+                "Unit": "Count"
+              }
+            ]
+          }
+        ]
+      },
+      "Environment": process.env.ENVIRONMENT || "prod",
+      "Service": "order-service",
+      "orders_processed_total": 1,
+      "orderId": order.id,
+      "totalAmount": order.total,
+      "itemsCount": order.items.length
+    }));
+
     console.log(`[Order] Created: ${order.id} — $${order.total} — ${order.items.length} items`);
     res.status(201).json(order);
   } catch (err) {
@@ -286,6 +318,8 @@ app.get('/events', (req, res) => {
 // ---------------------------------------------------------------------------
 // Error handling
 // ---------------------------------------------------------------------------
+app.use(AWSXRay.express.closeSegment());
+
 app.use((err, req, res, next) => {
   console.error('[Error]', err.stack);
   res.status(500).json({ error: 'Internal Server Error' });

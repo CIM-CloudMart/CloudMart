@@ -1,33 +1,44 @@
-# Run the terraform commands in the order below
+# CloudMart Infrastructure Deployment Guide (Terraform)
 
-> **Free tier / vCPU quota:** Clusters use **EKS Fargate** (`use_fargate = true`) so pods run at **0.25 vCPU** each instead of EC2 nodes (2 vCPU minimum). Set pod `resources.requests` to `cpu: 250m` and `memory: 512Mi` in Kubernetes manifests. GuardDuty is off by default on free-tier accounts. RDS backup retention is **1 day** (free-tier max).
->
-> **EKS version:** Prod stays on **1.30** (existing cluster). AWS only allows **one minor version** upgrade at a time (1.30 → 1.31 → …). Staging uses **1.33** (created fresh).
+This guide details instructions to provision the AWS infrastructure supporting the CloudMart platform.
 
-## Staging
+> **Free Tier / Cost Management Notice:**
+> - AWS EKS Fargate (`use_fargate = true`) runs pod nodes at **0.25 vCPU** and **512Mi Memory** to avoid standard EC2 Standard vCPU quota issues.
+> - **Security Features Active by Default**: AWS GuardDuty and AWS Security Hub are now enabled in environments `terraform.tfvars` (`enable_guardduty = true`). WAF is configurable via `enable_waf` (WAF regional ACL is not free-tier eligible).
+> - EKS Access Entries are automatically provisioned to authenticate the assumed GitHub Actions IAM Role and local developer roles.
+
+---
+
+## 1. Staging Environment
+Provision the staging AWS environment:
+
 ```bash
 cd infra/environments/staging
-```
-```bash
 terraform init -reconfigure
-```
-```bash
 terraform plan -out=tfplan
-```
-```bash
 terraform apply tfplan
 ```
 
-## Production
+### Key Outputs to Record
+- `web_acl_arn`: The ARN of the regional WAF ACL (configure in Helm values if WAF is enabled).
+- `github_actions_role_arn`: Assumed role for the CI/CD pipeline.
+- `eks_cluster_name`: `cloudmart-eks-staging`
+- `rds_endpoint`: PostgreSQL endpoint.
+
+---
+
+## 2. Production Environment
+Provision the production AWS environment:
+
 ```bash
 cd ../prod
-```
-```bash
 terraform init -reconfigure
-```
-```bash
 terraform plan -out=tfplan
-```
-```bash
 terraform apply tfplan
 ```
+
+### Key Outputs to Record
+- `web_acl_arn`: The WAF ACL ARN for edge filtering.
+- `github_actions_role_arn`: Assumed OIDC role for production CD.
+- `eks_cluster_name`: `cloudmart-eks-prod`
+- `rds_endpoint`: Production database endpoint.

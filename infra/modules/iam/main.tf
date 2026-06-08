@@ -121,6 +121,7 @@ data "aws_iam_policy_document" "order_service_policy" {
     effect = "Allow"
     actions = [
       "sqs:SendMessage",
+      "sqs:ReceiveMessage",
       "sqs:GetQueueAttributes",
       "sqs:GetQueueUrl"
     ]
@@ -228,8 +229,7 @@ data "aws_iam_policy_document" "user_service_policy" {
   statement {
     effect = "Allow"
     actions = [
-      "secretsmanager:GetSecretValue",
-      "secretsmanager:DescribeSecret"
+      "secretsmanager:GetSecretValue"
     ]
     resources = [
       var.db_secret_arn,
@@ -240,12 +240,12 @@ data "aws_iam_policy_document" "user_service_policy" {
   statement {
     effect = "Allow"
     actions = [
-      "kms:Decrypt",
-      "kms:DescribeKey"
+      "kms:Decrypt"
     ]
     resources = [var.kms_key_arn]
   }
 }
+
 
 resource "aws_iam_role_policy" "user_service" {
   name   = "${var.project}-user-service-policy-${var.environment}"
@@ -295,3 +295,86 @@ resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
   role       = aws_iam_role.aws_load_balancer_controller.name
   policy_arn = aws_iam_policy.aws_load_balancer_controller.arn
 }
+
+# ==================== GitHub Actions IAM Role (OIDC) ====================
+
+data "aws_iam_policy_document" "github_actions_assume_role" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    effect  = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = ["arn:${local.partition}:iam::${local.account_id}:oidc-provider/token.actions.githubusercontent.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = ["repo:CIM-CloudMart/CloudMart:*"]
+    }
+  }
+}
+
+resource "aws_iam_role" "github_actions" {
+  name               = "${var.project}-github-actions-role-${var.environment}"
+  assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role.json
+
+  tags = {
+    Project     = var.project
+    Environment = var.environment
+  }
+}
+
+data "aws_iam_policy_document" "github_actions_policy" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "ecr:GetAuthorizationToken"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:BatchGetImage",
+      "ecr:InitiateLayerUpload",
+      "ecr:UploadLayerPart",
+      "ecr:CompleteLayerUpload",
+      "ecr:PutImage"
+    ]
+    resources = ["arn:${local.partition}:ecr:${var.region}:${local.account_id}:repository/cloudmart-*"]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "eks:DescribeCluster"
+    ]
+    resources = ["arn:${local.partition}:eks:${var.region}:${local.account_id}:cluster/${var.project}-eks-${var.environment}"]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "wafv2:ListWebACLs"
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "github_actions" {
+  name   = "${var.project}-github-actions-policy-${var.environment}"
+  role   = aws_iam_role.github_actions.id
+  policy = data.aws_iam_policy_document.github_actions_policy.json
+}
+

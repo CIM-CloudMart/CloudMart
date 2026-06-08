@@ -18,11 +18,17 @@ from botocore.exceptions import ClientError
 from decimal import Decimal
 from dotenv import load_dotenv
 
+# AWS X-Ray Tracing Setup
+from aws_xray_sdk.core import xray_recorder, patch_all
+from aws_xray_sdk.ext.flask.middleware import XRayMiddleware
+patch_all()
+
 # ---------------------------------------------------------------------------
 # App setup
 # ---------------------------------------------------------------------------
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
+XRayMiddleware(app, xray_recorder)
 
 logging.basicConfig(
     level=logging.INFO,

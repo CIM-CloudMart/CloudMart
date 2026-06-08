@@ -26,12 +26,14 @@ on:
           - production
 
 permissions:
+  id-token: write
   contents: read
 
 jobs:
   deploy:
     name: Build, Tag & Deploy
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     steps:
       - name: Security Check
         run: |
@@ -70,8 +72,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ap-south-1
 
       - name: Log in to AWS ECR
@@ -123,10 +124,32 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.envs.outputs.image_uri }}:${{ steps.envs.outputs.image_tag }}
+          format: 'table'
+          severity: 'CRITICAL'
+          exit-code: '1'
+
+      - name: Generate SBOM
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.envs.outputs.image_uri }}:${{ steps.envs.outputs.image_tag }}
+          format: 'cyclonedx'
+          output: 'sbom.json'
+
+      - name: Upload SBOM Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ inputs.service }}-${{ inputs.environment }}
+          path: sbom.json
+
       - name: Update Helm Chart Values (GitOps Sync)
         run: |
           HELM_KEY="${{ steps.envs.outputs.helm_key }}"
           ENV_FILE="helm-charts/values-${{ steps.envs.outputs.file_env }}.yaml"
+          ENV_SHORT="${{ steps.envs.outputs.file_env }}"
           
           echo "Updating $ENV_FILE for service ${{ inputs.service }} with repository ${{ steps.envs.outputs.image_uri }} and tag ${{ steps.envs.outputs.image_tag }}..."
           
@@ -136,6 +159,15 @@ jobs:
           
           # Ensure global.registry is cleared in env override so it doesn't prepend the values.yaml one
           yq -i '.global.registry = ""' $ENV_FILE
+          
+          # Query WAF regional Web ACL dynamically from AWS CLI and attach to the Helm deploy if it exists
+          WAF_ARN=$(aws wafv2 list-web-acls --scope REGIONAL --region ap-south-1 --query "WebACLs[?starts_with(Name, 'cloudmart-waf-${ENV_SHORT}')].ARN" --output text)
+          if [ -n "$WAF_ARN" ] && [ "$WAF_ARN" != "None" ]; then
+            echo "Found WAF Web ACL: $WAF_ARN. Injecting annotation..."
+            yq -i ".frontend.ingress.annotations.\"alb.ingress.kubernetes.io/wafv2-acl-arn\" = \"$WAF_ARN\"" $ENV_FILE
+          else
+            echo "No WAF Web ACL found for environment ${ENV_SHORT}."
+          fi
           
           # Push to the helm-charts repository
           cd helm-charts

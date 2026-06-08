@@ -53,3 +53,8 @@ variable "kms_key_arn" {
   type        = string
 }
 
+variable "region" {
+  description = "AWS region"
+  type        = string
+}
+

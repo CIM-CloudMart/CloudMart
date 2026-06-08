@@ -52,3 +52,14 @@ output "user_service_role_arn" {
   value       = module.iam.user_service_role_arn
   description = "IAM Role ARN for user-service"
 }
+
+output "web_acl_arn" {
+  value       = module.waf.web_acl_arn
+  description = "The ARN of the WAF Web ACL"
+}
+
+output "github_actions_role_arn" {
+  value       = module.iam.github_actions_role_arn
+  description = "The ARN of the GitHub Actions IAM role"
+}
+

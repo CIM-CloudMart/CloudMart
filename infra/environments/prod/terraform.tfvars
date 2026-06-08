@@ -7,6 +7,6 @@ desired_node_count          = 0
 node_instance_type          = "t3.micro"
 team                        = "team-axel"
 single_nat_gateway          = true
-enable_guardduty            = false
+enable_guardduty            = true
 backup_retention_period = 1
 
