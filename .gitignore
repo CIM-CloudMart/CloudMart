@@ -24,6 +24,10 @@
 **/.terraformrc
 **/terraform.rc
 
+.terraform.lock.hcl
+tfPlan
+tfPlan.out
+
 cleanup_resources.ps1
 cleanup_resources.sh
 
