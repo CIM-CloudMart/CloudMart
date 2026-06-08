@@ -254,3 +254,45 @@ resource "aws_iam_role_policy" "user_service" {
   policy = data.aws_iam_policy_document.user_service_policy.json
 }
 
+# ==================== AWS Load Balancer Controller IAM Role ====================
+
+data "aws_iam_policy_document" "aws_load_balancer_controller_assume_role" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    effect  = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = ["arn:${local.partition}:iam::${local.account_id}:oidc-provider/${local.oidc_provider}"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider}:sub"
+      values   = ["system:serviceaccount:kube-system:aws-load-balancer-controller"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "aws_load_balancer_controller" {
+  name               = "${var.project}-aws-load-balancer-controller-role-${var.environment}"
+  assume_role_policy = data.aws_iam_policy_document.aws_load_balancer_controller_assume_role.json
+}
+
+resource "aws_iam_policy" "aws_load_balancer_controller" {
+  name        = "${var.project}-aws-load-balancer-controller-policy-${var.environment}"
+  path        = "/"
+  description = "IAM policy for AWS Load Balancer Controller"
+  policy      = file("${path.module}/iam_policy.json")
+}
+
+resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
+  role       = aws_iam_role.aws_load_balancer_controller.name
+  policy_arn = aws_iam_policy.aws_load_balancer_controller.arn
+}
