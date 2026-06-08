@@ -14,7 +14,7 @@ const API = {
 // Styles (inline — students can extract to CSS files)
 // ---------------------------------------------------------------------------
 const styles = {
-  app: { minHeight: '100vh', background: '#03bfc5ff' },
+  app: { minHeight: '100vh', background: '#f3f6ceff' },
   header: {
     background: '#1a1a2e', color: '#fff', padding: '16px 32px',
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
