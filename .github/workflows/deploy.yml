@@ -112,8 +112,10 @@ jobs:
           echo "file_env=${ENV_SHORT}" >> $GITHUB_OUTPUT
           echo "helm_key=$HELM_KEY" >> $GITHUB_OUTPUT
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+          echo "ecr_repository=$ECR_REPOSITORY" >> $GITHUB_OUTPUT
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
 
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
@@ -154,11 +156,9 @@ jobs:
           echo "Updating $ENV_FILE for service ${{ inputs.service }} with repository ${{ steps.envs.outputs.image_uri }} and tag ${{ steps.envs.outputs.image_tag }}..."
           
           # Update the service image repository and tag
-          yq -i ".${HELM_KEY}.image.repository = \"${{ steps.envs.outputs.image_uri }}\"" $ENV_FILE
+          yq -i ".${HELM_KEY}.image.repository = \"${{ steps.envs.outputs.ecr_repository }}\"" $ENV_FILE
           yq -i ".${HELM_KEY}.image.tag = \"${{ steps.envs.outputs.image_tag }}\"" $ENV_FILE
-          
-          # Ensure global.registry is cleared in env override so it doesn't prepend the values.yaml one
-          yq -i '.global.registry = ""' $ENV_FILE
+
           
           # Query WAF regional Web ACL dynamically from AWS CLI and attach to the Helm deploy if it exists
           WAF_ARN=$(aws wafv2 list-web-acls --scope REGIONAL --region ap-south-1 --query "WebACLs[?starts_with(Name, 'cloudmart-waf-${ENV_SHORT}')].ARN" --output text)
