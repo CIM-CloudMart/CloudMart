@@ -45,6 +45,15 @@ jobs:
         with:
           ref: ${{ inputs.branch }}
 
+      - name: Verify Checked-out Branch
+        run: |
+          CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          echo "Checked out branch is $CURRENT_BRANCH"
+          if [ "${{ inputs.environment }}" = "production" ] && [ "$CURRENT_BRANCH" != "main" ]; then
+            echo "::error::Security violation: Deployed branch must be main for production environment!"
+            exit 1
+          fi
+
       - name: Checkout Helm Charts
         uses: actions/checkout@v4
         with:
@@ -94,24 +103,47 @@ jobs:
           # ECR Repository name pattern matching Terraform modules/ecr/main.tf
           ECR_REPOSITORY="cloudmart-${SERVICE}-${ENV_SHORT}"
           IMAGE_URI="${REGISTRY}/${ECR_REPOSITORY}"
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          IMAGE_TAG="${SHORT_SHA}-${{ github.run_number }}"
           
           echo "cluster_name=cloudmart-eks-${ENV_SHORT}" >> $GITHUB_OUTPUT
           echo "namespace=cloudmart-${ENV_SHORT}" >> $GITHUB_OUTPUT
           echo "file_env=${ENV_SHORT}" >> $GITHUB_OUTPUT
           echo "helm_key=$HELM_KEY" >> $GITHUB_OUTPUT
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
-          echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
           context: ./services/${{ inputs.service }}
           push: true
-          tags: |
-            ${{ steps.envs.outputs.image_uri }}:${{ steps.envs.outputs.short_sha }}
-            ${{ steps.envs.outputs.image_uri }}:latest
+          tags: ${{ steps.envs.outputs.image_uri }}:${{ steps.envs.outputs.image_tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Update Helm Chart Values (GitOps Sync)
+        run: |
+          HELM_KEY="${{ steps.envs.outputs.helm_key }}"
+          ENV_FILE="helm-charts/values-${{ steps.envs.outputs.file_env }}.yaml"
+          
+          echo "Updating $ENV_FILE for service ${{ inputs.service }} with repository ${{ steps.envs.outputs.image_uri }} and tag ${{ steps.envs.outputs.image_tag }}..."
+          
+          # Update the service image repository and tag
+          yq -i ".${HELM_KEY}.image.repository = \"${{ steps.envs.outputs.image_uri }}\"" $ENV_FILE
+          yq -i ".${HELM_KEY}.image.tag = \"${{ steps.envs.outputs.image_tag }}\"" $ENV_FILE
+          
+          # Ensure global.registry is cleared in env override so it doesn't prepend the values.yaml one
+          yq -i '.global.registry = ""' $ENV_FILE
+          
+          # Push to the helm-charts repository
+          cd helm-charts
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add values-${{ steps.envs.outputs.file_env }}.yaml
+          git commit -m "chore(gitops): deploy ${{ inputs.service }} with tag ${{ steps.envs.outputs.image_tag }} to ${{ inputs.environment }}"
+          git push
 
       - name: Update Kubeconfig
         run: |
@@ -128,7 +160,9 @@ jobs:
             --namespace ${{ steps.envs.outputs.namespace }} \
             --create-namespace \
             -f ./helm-charts/values.yaml \
-            -f ./helm-charts/values-${{ steps.envs.outputs.file_env }}.yaml \
-            --set ${{ steps.envs.outputs.helm_key }}.image.repository=${{ steps.envs.outputs.image_uri }} \
-            --set ${{ steps.envs.outputs.helm_key }}.image.tag=${{ steps.envs.outputs.short_sha }} \
-            --set global.registry=""
+            -f ./helm-charts/values-${{ steps.envs.outputs.file_env }}.yaml
+
+      - name: Verify Rollout
+        run: |
+          echo "Verifying rollout status for deployment/${{ inputs.service }} in namespace ${{ steps.envs.outputs.namespace }}..."
+          kubectl rollout status deployment/${{ inputs.service }} -n ${{ steps.envs.outputs.namespace }} --timeout=300s
