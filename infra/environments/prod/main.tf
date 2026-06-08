@@ -224,6 +224,22 @@ resource "helm_release" "aws_load_balancer_controller" {
   depends_on = [module.eks, module.iam]
 }
 
+resource "helm_release" "kyverno" {
+  name             = "kyverno"
+  repository       = "https://kyverno.github.io/kyverno"
+  chart            = "kyverno"
+  version          = "3.2.6"
+  namespace        = "kyverno"
+  create_namespace = true
+
+  set {
+    name  = "crds.install"
+    value = "true"
+  }
+
+  depends_on = [module.eks]
+}
+
 resource "kubernetes_namespace" "staging" {
   metadata {
     name = "staging"

@@ -36,6 +36,22 @@ resource "aws_security_group" "rds_sg" {
   }
 }
 
+resource "aws_db_parameter_group" "postgres" {
+  name   = "${var.project}-postgres-pg-${var.environment}"
+  family = "postgres16"
+
+  parameter {
+    name  = "rds.force_ssl"
+    value = "1"
+  }
+
+  tags = {
+    Name        = "${var.project}-postgres-pg-${var.environment}"
+    Project     = var.project
+    Environment = var.environment
+  }
+}
+
 resource "aws_db_instance" "postgres" {
   identifier     = "${var.project}-postgres-${var.environment}"
   engine         = "postgres"
@@ -55,6 +71,7 @@ resource "aws_db_instance" "postgres" {
   password = var.db_password
 
   db_subnet_group_name   = aws_db_subnet_group.main.name
+  parameter_group_name   = aws_db_parameter_group.postgres.name
 
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
 

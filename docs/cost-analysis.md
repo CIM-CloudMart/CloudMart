@@ -12,11 +12,14 @@ The default configuration provisions EKS Fargate serverless profiles for microse
 pie title "Monthly Cost Breakdown (Fargate Setup - Total: ~$226/mo)"
     "AWS EKS Cluster Fee" : 73.00
     "Fargate Pod Compute (8 Pods)" : 72.00
-    "NAT Gateway (Single)" : 35.00
+    "NAT Gateway (Single)" : 32.85
     "Application Load Balancer" : 18.00
     "RDS PostgreSQL (db.t3.micro)" : 15.44
-    "CloudWatch & KMS Security" : 11.00
-    "ECR Container Registry" : 2.00
+    "CloudWatch Logs & Metrics" : 10.00
+    "KMS Customer Managed Key" : 1.00
+    "AWS Secrets Manager (2 secrets)" : 0.80
+    "Amazon ECR & S3 Storage" : 2.00
+    "Amazon Route 53 Hosted Zone" : 0.50
 ```
 
 ---
@@ -33,11 +36,19 @@ Fargate runs containers on demand, billing per second for exact CPU and memory a
 | **Amazon EKS Cluster** | EKS Control Plane base fee (flat charge) | **$73.00** |
 | **EKS Fargate Compute** | ~8 active pods (microservices + CoreDNS + ALBC) at 0.25 vCPU & 0.5 GB RAM | **$72.00** |
 | **Amazon RDS PostgreSQL** | 1x `db.t3.micro` Single-AZ instance + 20 GB gp3 storage | **$15.44** |
+| **Amazon DynamoDB** | `PAY_PER_REQUEST` On-Demand mode; fully covered by AWS DynamoDB Free Tier (up to 25 GB storage & 25 WCU/RCU) | **$0.00** |
 | **NAT Gateway** | 1x NAT Gateway base fee (processing fee extra per usage) | **$32.85** |
 | **Application Load Balancer** | 1x ALB Ingress Controller base fee + basic LCU usage | **$18.00** |
+| **AWS Secrets Manager** | 2 active secrets (database credentials and JWT secret) * $0.40/secret/month | **$0.80** |
+| **Amazon SQS** | Standard queue storage and calls; fully covered by AWS SQS Free Tier (1 million requests/month) | **$0.00** |
+| **Amazon SES** | Verified sender email alerts; fully covered by AWS SES Free Tier (3,000 emails/month) | **$0.00** |
 | **Amazon ECR** | Container image registry storage (~20 GB image history) | **$2.00** |
-| **CloudWatch & KMS** | Log exports (PG, microservices) + 1x KMS Customer Managed Key | **$11.00** |
-| **Total Estimated Base Cost** | **Default Serverless Deployment** | **~$224.29 / Month** |
+| **Amazon S3** | Remote state storage and app assets; covered by S3 Free Tier (5 GB standard storage) | **$0.00** |
+| **Amazon Route 53** | 1 hosted zone base fee ($0.50/month) + basic DNS queries | **$0.50** |
+| **CloudWatch** | Logs ingestion & storage (~10 GB) and basic metric dashboard widgets | **$10.00** |
+| **AWS KMS** | 1x KMS Customer Managed Key base fee (flat charge) | **$1.00** |
+| **AWS Budgets & X-Ray** | 1 active budget alarm + trace ingestion; fully covered by Free Tiers | **$0.00** |
+| **Total Estimated Base Cost** | **Default Serverless Deployment** | **~$225.59 / Month** |
 
 ---
 
@@ -50,11 +61,19 @@ This model deploys a traditional Auto Scaling group of EC2 instances. It is opti
 | **Amazon EC2 Nodes** | 2x `t3.medium` worker instances ($30.37/mo each) | **$60.74** |
 | **EBS Storage (Nodes)** | 2x 20 GB gp3 storage volumes ($0.08/GB-month) | **$3.20** |
 | **Amazon RDS PostgreSQL** | 1x `db.t3.micro` Single-AZ instance + 20 GB gp3 storage | **$15.44** |
+| **Amazon DynamoDB** | `PAY_PER_REQUEST` On-Demand mode; fully covered by AWS DynamoDB Free Tier | **$0.00** |
 | **NAT Gateway** | 1x NAT Gateway base fee | **$32.85** |
 | **Application Load Balancer** | 1x ALB Ingress Controller base fee + basic LCU usage | **$18.00** |
+| **AWS Secrets Manager** | 2 active secrets (database credentials and JWT secret) * $0.40/secret/month | **$0.80** |
+| **Amazon SQS** | Standard queue storage and calls; fully covered by AWS SQS Free Tier | **$0.00** |
+| **Amazon SES** | Verified sender email alerts; fully covered by AWS SES Free Tier | **$0.00** |
 | **Amazon ECR** | Container image registry storage (~20 GB image history) | **$2.00** |
-| **CloudWatch & KMS** | Log exports (PG, DaemonSet logs) + 1x KMS Customer Managed Key | **$11.00** |
-| **Total Estimated Base Cost** | **Dedicated Worker Node Deployment** | **~$216.23 / Month** |
+| **Amazon S3** | Remote state storage and app assets; covered by S3 Free Tier | **$0.00** |
+| **Amazon Route 53** | 1 hosted zone base fee ($0.50/month) + basic DNS queries | **$0.50** |
+| **CloudWatch** | Logs ingestion & storage (~10 GB) and basic metric dashboard widgets | **$10.00** |
+| **AWS KMS** | 1x KMS Customer Managed Key base fee (flat charge) | **$1.00** |
+| **AWS Budgets & X-Ray** | 1 active budget alarm + trace ingestion; fully covered by Free Tiers | **$0.00** |
+| **Total Estimated Base Cost** | **Dedicated Worker Node Deployment** | **~$217.53 / Month** |
 
 ---
 
@@ -71,6 +90,9 @@ In production environments, optional high-availability features can be toggled i
 3. **Multi-AZ NAT Gateways (`single_nat_gateway = false`):**
    * *Purpose:* Isolates NAT failures to individual Availability Zones.
    * *Cost Impact:* Deploys 3 NAT Gateways instead of 1 (Adds **+$65.70/month**).
+4. **AWS GuardDuty Threat Detection (`enable_guardduty = true`):**
+   * *Purpose:* Performs continuous threat assessment of VPC flow logs, DNS logs, and EKS audit logs.
+   * *Cost Impact:* Billed based on data volume parsed (Adds **+$1.00 to $5.00/month**).
 
 ---
 

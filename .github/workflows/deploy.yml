@@ -157,11 +157,21 @@ jobs:
 
       - name: Deploy Helm Chart to EKS
         run: |
+          # Query WAF Web ACL ARN dynamically
+          WEB_ACL_ARN=$(aws wafv2 list-web-acls --scope REGIONAL --region ap-south-1 --query "WebACLs[?starts_with(Name, 'cloudmart-waf-web-acl-${{ steps.envs.outputs.file_env }}')].ARN" --output text)
+          
+          EXTRA_ARGS=""
+          if [ -n "$WEB_ACL_ARN" ] && [ "$WEB_ACL_ARN" != "None" ]; then
+            echo "Found WAF Web ACL: $WEB_ACL_ARN"
+            EXTRA_ARGS="--set frontend.ingress.annotations.alb\\.ingress\\.kubernetes\\.io/wafv2-acl-arn=$WEB_ACL_ARN"
+          fi
+
           helm upgrade --install cloudmart ./helm-charts \
             --namespace ${{ steps.envs.outputs.namespace }} \
             --create-namespace \
             -f ./helm-charts/values.yaml \
-            -f ./helm-charts/values-${{ steps.envs.outputs.file_env }}.yaml
+            -f ./helm-charts/values-${{ steps.envs.outputs.file_env }}.yaml \
+            $EXTRA_ARGS
 
       - name: Verify Rollout
         run: |
