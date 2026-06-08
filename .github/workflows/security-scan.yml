@@ -26,7 +26,7 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
-          exit-code: '0'          # report only — don't block until vulns are triaged
+          exit-code: '0'
 
       - name: Upload Trivy SARIF to GitHub Security
         if: always()
@@ -85,15 +85,16 @@ jobs:
       - name: Install pip-audit
         run: pip install pip-audit --quiet
 
-      # Node services — generate lockfile if missing, then audit
+      # ── Node services ──────────────────────────────────────────────────────
+
       - name: Audit frontend
         working-directory: services/frontend
         run: |
           if [ ! -f package-lock.json ]; then
             npm install --package-lock-only --ignore-scripts
           fi
-          npm audit --audit-level=critical
-        continue-on-error: true   # report only until lockfiles are committed
+          npm audit --audit-level=critical --json > /tmp/audit-frontend.json || true
+        continue-on-error: true
 
       - name: Audit order-service
         working-directory: services/order-service
@@ -101,7 +102,7 @@ jobs:
           if [ ! -f package-lock.json ]; then
             npm install --package-lock-only --ignore-scripts
           fi
-          npm audit --audit-level=critical
+          npm audit --audit-level=critical --json > /tmp/audit-order.json || true
         continue-on-error: true
 
       - name: Audit notification-service
@@ -110,19 +111,125 @@ jobs:
           if [ ! -f package-lock.json ]; then
             npm install --package-lock-only --ignore-scripts
           fi
-          npm audit --audit-level=critical
+          npm audit --audit-level=critical --json > /tmp/audit-notification.json || true
         continue-on-error: true
 
-      # Python services
+      # ── Python services ────────────────────────────────────────────────────
+
       - name: Audit product-service
         working-directory: services/product-service
-        run: pip-audit -r requirements.txt
+        run: pip-audit -r requirements.txt -f json -o /tmp/audit-product.json || true
         continue-on-error: true
 
       - name: Audit user-service
         working-directory: services/user-service
-        run: pip-audit -r requirements.txt
+        run: pip-audit -r requirements.txt -f json -o /tmp/audit-user.json || true
         continue-on-error: true
+
+      # ── Summary ────────────────────────────────────────────────────────────
+
+      - name: Write audit summary
+        if: always()
+        run: |
+          echo "## 🔍 Dependency Audit Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "_Commit: \`${{ github.sha }}\` | Branch: \`${{ github.ref_name }}\`_" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # ── Python services ──
+          echo "### 🐍 Python Services" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          for SERVICE in product user; do
+            FILE="/tmp/audit-${SERVICE}.json"
+            LABEL="${SERVICE}-service"
+
+            if [ ! -f "$FILE" ]; then
+              echo "#### \`$LABEL\` — ⚪ No results file found" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              continue
+            fi
+
+            VULN_COUNT=$(python3 -c "
+          import json
+          d = json.load(open('$FILE'))
+          print(sum(len(dep.get('vulns', [])) for dep in d.get('dependencies', [])))
+          " 2>/dev/null || echo 0)
+
+            if [ "$VULN_COUNT" -eq 0 ]; then
+              echo "#### \`$LABEL\` — ✅ No vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "#### \`$LABEL\` — ⚠️ $VULN_COUNT vulnerabilit$([ $VULN_COUNT -eq 1 ] && echo y || echo ies) found" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "| Package | Version | ID | Fix Version |" >> $GITHUB_STEP_SUMMARY
+              echo "|---------|---------|-----|-------------|" >> $GITHUB_STEP_SUMMARY
+              python3 -c "
+          import json
+          d = json.load(open('$FILE'))
+          for dep in d.get('dependencies', []):
+              for v in dep.get('vulns', []):
+                  name    = dep.get('name', '')
+                  version = dep.get('version', '')
+                  vid     = v.get('id', '')
+                  fix     = ', '.join(v.get('fix_versions', [])) or '—'
+                  print(f'| \`{name}\` | {version} | [{vid}](https://osv.dev/vulnerability/{vid}) | {fix} |')
+          " >> $GITHUB_STEP_SUMMARY
+            fi
+            echo "" >> $GITHUB_STEP_SUMMARY
+          done
+
+          # ── Node services ──
+          echo "### 🟩 Node.js Services" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          for SERVICE in frontend order notification; do
+            FILE="/tmp/audit-${SERVICE}.json"
+            LABEL="${SERVICE}-service"
+            [ "$SERVICE" = "frontend" ] && LABEL="frontend"
+
+            if [ ! -f "$FILE" ]; then
+              echo "#### \`$LABEL\` — ⚪ No results file found" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              continue
+            fi
+
+            VULN_COUNT=$(python3 -c "
+          import json, sys
+          try:
+              d = json.load(open('$FILE'))
+              vulns = d.get('vulnerabilities', {})
+              critical = sum(1 for v in vulns.values() if v.get('severity','').lower() == 'critical')
+              print(critical)
+          except:
+              print(0)
+          " 2>/dev/null || echo 0)
+
+            if [ "$VULN_COUNT" -eq 0 ]; then
+              echo "#### \`$LABEL\` — ✅ No critical vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "#### \`$LABEL\` — ⚠️ $VULN_COUNT critical vulnerabilit$([ $VULN_COUNT -eq 1 ] && echo y || echo ies) found" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "| Package | Severity | Via | Fix Available |" >> $GITHUB_STEP_SUMMARY
+              echo "|---------|----------|-----|---------------|" >> $GITHUB_STEP_SUMMARY
+              python3 -c "
+          import json
+          d = json.load(open('$FILE'))
+          for name, v in d.get('vulnerabilities', {}).items():
+              if v.get('severity', '').lower() != 'critical':
+                  continue
+              severity = v.get('severity', '')
+              via      = ', '.join(str(x) if isinstance(x, str) else x.get('name','?') for x in v.get('via', []))[:60]
+              fix      = '✅ Yes' if v.get('fixAvailable') else '❌ No'
+              print(f'| \`{name}\` | {severity} | {via} | {fix} |')
+          " >> $GITHUB_STEP_SUMMARY
+            fi
+            echo "" >> $GITHUB_STEP_SUMMARY
+          done
+
+          # ── Footer ──
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "> 💡 To fix Python vulns run \`pip install --upgrade <package>\` and update \`requirements.txt\`." >> $GITHUB_STEP_SUMMARY
+          echo "> 💡 To fix Node vulns run \`npm audit fix\` in the service directory." >> $GITHUB_STEP_SUMMARY
 
   scan-summary:
     name: Scan Summary
@@ -130,13 +237,28 @@ jobs:
     needs: [trivy-scan, secret-scan, dependency-audit]
     if: always()
     steps:
-      - name: Check all scan results
+      - name: Write job summary
         run: |
-          echo "Trivy:   ${{ needs.trivy-scan.result }}"
-          echo "Secrets: ${{ needs.secret-scan.result }}"
-          echo "Deps:    ${{ needs.dependency-audit.result }}"
+          echo "## 🛡️ Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+
+          TRIVY="${{ needs.trivy-scan.result }}"
+          SECRETS="${{ needs.secret-scan.result }}"
+          DEPS="${{ needs.dependency-audit.result }}"
+
+          icon() { [ "$1" = "success" ] && echo "✅ Passed" || echo "❌ Failed"; }
+
+          echo "| Trivy FS Scan   | $(icon $TRIVY) |"   >> $GITHUB_STEP_SUMMARY
+          echo "| Secret Scan     | $(icon $SECRETS) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Audit| $(icon $DEPS) |"    >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Block on verified secrets
+        run: |
           if [[ "${{ needs.secret-scan.result }}" == "failure" ]]; then
-            echo "Secret scan failed — verified secrets found in repo. Blocking."
+            echo "❌ Secret scan failed — verified secrets found. Blocking commit."
             exit 1
           fi
-          echo "All scans completed."
+          echo "✅ No verified secrets detected."
