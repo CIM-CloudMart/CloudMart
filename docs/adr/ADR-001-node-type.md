@@ -46,3 +46,18 @@ We chose **`t3.medium` instances** (2 vCPUs, 4 GiB Memory) as the baseline worke
 | **`t3.micro`** | 1 vCPU / 1 GiB | **Rejected.** Insufficient allocatable memory for basic EKS system pods and application workloads. |
 | **`t3.small`** | 2 vCPUs / 2 GiB | **Rejected.** Marginal memory capacity; leaves no room for scaling replicas or resource-intensive logging agents. |
 | **`t3.medium`** | 2 vCPUs / 4 GiB | **Accepted.** Delivers the optimal cost-to-performance balance for stable cluster operations. |
+
+---
+
+## 🔍 5. Compute Sizing Recommendations Review
+
+Under production and staging workloads, we evaluated AWS Compute Optimizer recommendations to optimize cluster cost-efficiency:
+
+1. **Staging Environment Recommendation (Downsize to `t3.small` / Limit Fargate)**:
+   * *Recommendation:* AWS Compute Optimizer identifies staging instances as underutilized and recommends downsizing worker nodes to `t3.small` (saves ~$15/mo) or restricting Fargate resources.
+   * *Decision:* **Rejected.**
+   * *Justification:* During CI/CD rolling deployments, system overhead spikes significantly. Downsizing below `t3.medium` or restricting memory constraints causes scheduling failures, deployment timeouts, and Out-of-Memory (OOM) pod crashes. Maintaining a stable compute floor is critical to avoid development bottlenecks.
+2. **Production Environment Recommendation (Maintain `t3.medium` / Fargate base)**:
+   * *Recommendation:* Retain compute capacity at `t3.medium` or equivalent Fargate compute allocation profiles (`0.25 vCPU / 512 MiB` per microservice pod).
+   * *Decision:* **Accepted.**
+   * *Justification:* Current allocations are optimal due to overhead from system controllers, ingress traffic routers, and sidecar agents (AWS VPC CNI, CoreDNS, and CloudWatch Fluent Bit logging containers).

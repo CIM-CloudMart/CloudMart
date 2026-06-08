@@ -107,3 +107,44 @@ The Terraform infrastructure codebase implements several cost management pattern
 * **RDS Storage Auto-scaling (`max_allocated_storage = 20`):** Automatically resizes storage up to 20 GB as write volumes grow, avoiding the cost of pre-allocating large unused EBS disks.
 * **ECR Lifecycle Policies:** Deploys automated policies to clean up old, untagged images, capping registry fees at baseline levels.
 * **AWS Budgets Alerting:** Configures budget controls (`limit_amount = "100"`) that send emails to `admin@cloudmart.example` when actual or forecasted monthly spending exceeds $100.
+
+---
+
+## 📈 5. Unit Economics: Cost per 1,000 Orders
+
+To evaluate the operational cost-efficiency of CloudMart, we calculate the estimated infrastructure cost to process **1,000 orders** based on the EKS Fargate base configuration (estimated at **$225.59 / month**):
+
+$$\text{Unit Cost} = \left( \frac{\text{Monthly Infrastructure Cost}}{\text{Monthly Orders Volume}} \right) \times 1,000$$
+
+| Monthly Order Volume | Estimated Infrastructure Cost | Cost per 1,000 Orders | Notes / Interpretation |
+| :--- | :--- | :--- | :--- |
+| **10,000 orders** | $225.59 | **$22.56** | High unit cost due to fixed cluster fees ($73) and idle NAT gateway fees ($32.85). |
+| **50,000 orders** | $225.59 | **$4.51** | Moderate unit cost; infrastructure overhead is spread across higher transactions. |
+| **100,000 orders** | $225.59 | **$2.26** | Highly optimized unit cost; ideal target for scaling efficiency. |
+
+*Note: This model assumes compute requirements remain within baseline bounds (no heavy scaling). As order volume scales, CPU/memory auto-scaling may increase variable Fargate/RDS costs slightly, but unit cost will continue to decrease significantly due to the amortization of flat-fee base infrastructure.*
+
+---
+
+## 🔒 6. Committed Use & Savings Plan Analysis (1-Year Model)
+
+By default, all compute resources in CloudMart are billed at AWS On-Demand rates. We model the potential annual savings if production workloads were covered by a 1-year Savings Plan (no upfront payment option):
+
+### Option A: EKS Fargate Serverless Compute (1-Year Compute Savings Plan)
+*   **On-Demand Compute Rate:** $72.00 / month ($864.00 / year)
+*   **Compute Savings Plan Discount (Fargate average):** **~28%**
+*   **Model Cost:**
+    *   *Monthly Cost:* $72.00 * (1 - 0.28) = **$51.84 / month**
+    *   *Annual Cost:* $51.84 * 12 = **$622.08 / year**
+*   **Total Annual Savings:** **$241.92 / Year** saved.
+
+### Option B: EC2 Worker Nodes (1-Year Instance Savings Plan - `t3.medium`)
+*   **On-Demand Instance Rate:** $60.74 / month ($728.88 / year)
+*   **EC2 Instance Savings Plan Discount (`t3.medium` average):** **~42%**
+*   **Model Cost:**
+    *   *Monthly Cost:* $60.74 * (1 - 0.42) = **$35.23 / month**
+    *   *Annual Cost:* $35.23 * 12 = **$422.76 / year**
+*   **Total Annual Savings:** **$306.12 / Year** saved.
+
+> [!TIP]
+> Since staging environments are often shut down or scaled to zero outside working hours, committing to a Savings Plan is recommended **only for production workloads** where compute utilization is constant and predictable.

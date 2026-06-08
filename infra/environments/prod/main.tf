@@ -151,10 +151,12 @@ module "waf" {
 
 
 module "route53" {
-  source      = "../../modules/route53"
-  project     = var.project
-  environment = var.environment
-  domain_name = var.domain_name
+  source                     = "../../modules/route53"
+  project                    = var.project
+  environment                = var.environment
+  domain_name                = var.domain_name
+  alb_dns_name               = var.alb_dns_name
+  failover_s3_website_domain = module.s3.failover_website_endpoint
 }
 
 module "budget" {

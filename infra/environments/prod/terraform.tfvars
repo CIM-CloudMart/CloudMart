@@ -8,5 +8,6 @@ node_instance_type          = "t3.micro"
 team                        = "team-axel"
 single_nat_gateway          = true
 enable_guardduty            = false
-backup_retention_period = 1
+backup_retention_period     = 7
+rds_multi_az                = true
 

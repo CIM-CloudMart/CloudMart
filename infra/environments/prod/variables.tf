@@ -123,3 +123,9 @@ variable "enable_waf" {
   default     = false
 }
 
+variable "alb_dns_name" {
+  description = "The DNS endpoint of the EKS ingress Application Load Balancer"
+  type        = string
+  default     = null
+}
+
