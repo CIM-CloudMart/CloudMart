@@ -26,14 +26,12 @@ on:
           - production
 
 permissions:
-  id-token: write
   contents: read
 
 jobs:
   deploy:
     name: Build, Tag & Deploy
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     steps:
       - name: Security Check
         run: |
@@ -72,7 +70,8 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-south-1
 
       - name: Log in to AWS ECR
@@ -112,10 +111,8 @@ jobs:
           echo "file_env=${ENV_SHORT}" >> $GITHUB_OUTPUT
           echo "helm_key=$HELM_KEY" >> $GITHUB_OUTPUT
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
-          echo "ecr_repository=$ECR_REPOSITORY" >> $GITHUB_OUTPUT
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
-
 
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
@@ -130,23 +127,15 @@ jobs:
         run: |
           HELM_KEY="${{ steps.envs.outputs.helm_key }}"
           ENV_FILE="helm-charts/values-${{ steps.envs.outputs.file_env }}.yaml"
-          ENV_SHORT="${{ steps.envs.outputs.file_env }}"
           
           echo "Updating $ENV_FILE for service ${{ inputs.service }} with repository ${{ steps.envs.outputs.image_uri }} and tag ${{ steps.envs.outputs.image_tag }}..."
           
           # Update the service image repository and tag
-          yq -i ".${HELM_KEY}.image.repository = \"${{ steps.envs.outputs.ecr_repository }}\"" $ENV_FILE
+          yq -i ".${HELM_KEY}.image.repository = \"${{ steps.envs.outputs.image_uri }}\"" $ENV_FILE
           yq -i ".${HELM_KEY}.image.tag = \"${{ steps.envs.outputs.image_tag }}\"" $ENV_FILE
-
           
-          # Query WAF regional Web ACL dynamically from AWS CLI and attach to the Helm deploy if it exists
-          WAF_ARN=$(aws wafv2 list-web-acls --scope REGIONAL --region ap-south-1 --query "WebACLs[?starts_with(Name, 'cloudmart-waf-${ENV_SHORT}')].ARN" --output text)
-          if [ -n "$WAF_ARN" ] && [ "$WAF_ARN" != "None" ]; then
-            echo "Found WAF Web ACL: $WAF_ARN. Injecting annotation..."
-            yq -i ".frontend.ingress.annotations.\"alb.ingress.kubernetes.io/wafv2-acl-arn\" = \"$WAF_ARN\"" $ENV_FILE
-          else
-            echo "No WAF Web ACL found for environment ${ENV_SHORT}."
-          fi
+          # Ensure global.registry is cleared in env override so it doesn't prepend the values.yaml one
+          yq -i '.global.registry = ""' $ENV_FILE
           
           # Push to the helm-charts repository
           cd helm-charts
