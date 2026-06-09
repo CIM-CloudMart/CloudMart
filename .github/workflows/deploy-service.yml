@@ -1,0 +1,341 @@
+name: Deploy Service (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Microservice to deploy"
+        required: true
+        type: choice
+        options:
+          - product-service
+          - order-service
+          - user-service
+          - notification-service
+          - frontend
+          - all
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - staging
+          - prod
+      image_tag:
+        description: "Existing image tag to deploy (leave blank or 'latest' to build fresh)"
+        required: false
+        default: "latest"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  resolve:
+    name: Resolve Deployment Plan
+    runs-on: ubuntu-latest
+    outputs:
+      environment:  ${{ steps.plan.outputs.environment }}
+      deploy_env:   ${{ steps.plan.outputs.deploy_env }}
+      namespace:    ${{ steps.plan.outputs.namespace }}
+      env_short:    ${{ steps.plan.outputs.env_short }}
+      services:     ${{ steps.plan.outputs.services }}
+      image_tag:    ${{ steps.plan.outputs.image_tag }}
+      should_build: ${{ steps.plan.outputs.should_build }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build Deployment Plan
+        id: plan
+        run: |
+          RAW_ENV="${{ inputs.environment }}"
+          if [ "$RAW_ENV" = "prod" ]; then
+            ENV_SHORT="prod"
+            NAMESPACE="cloudmart-prod"
+            DEPLOY_ENV="production"
+          else
+            ENV_SHORT="staging"
+            NAMESPACE="cloudmart-staging"
+            DEPLOY_ENV=""
+          fi
+
+          if [ "${{ inputs.service }}" = "all" ]; then
+            SERVICES='["frontend","product-service","order-service","user-service","notification-service"]'
+          else
+            SERVICES='["${{ inputs.service }}"]'
+          fi
+
+          DISPATCH_TAG="${{ inputs.image_tag }}"
+          if [ -n "$DISPATCH_TAG" ] && [ "$DISPATCH_TAG" != "latest" ]; then
+            IMAGE_TAG="$DISPATCH_TAG"
+            SHOULD_BUILD="false"
+          else
+            SHORT_SHA=$(git rev-parse --short HEAD)
+            IMAGE_TAG="${SHORT_SHA}-${{ github.run_number }}"
+            SHOULD_BUILD="true"
+          fi
+
+          echo "environment=$RAW_ENV"      >> $GITHUB_OUTPUT
+          echo "deploy_env=$DEPLOY_ENV"    >> $GITHUB_OUTPUT
+          echo "namespace=$NAMESPACE"      >> $GITHUB_OUTPUT
+          echo "env_short=$ENV_SHORT"      >> $GITHUB_OUTPUT
+          echo "services=$SERVICES"        >> $GITHUB_OUTPUT
+          echo "image_tag=$IMAGE_TAG"      >> $GITHUB_OUTPUT
+          echo "should_build=$SHOULD_BUILD" >> $GITHUB_OUTPUT
+
+          echo "### 🔧 Manual Deployment Plan" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |"            >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|"            >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`$RAW_ENV\` |"      >> $GITHUB_STEP_SUMMARY
+          echo "| **Namespace**   | \`$NAMESPACE\` |"    >> $GITHUB_STEP_SUMMARY
+          echo "| **Services**    | \`$SERVICES\` |"     >> $GITHUB_STEP_SUMMARY
+          echo "| **Image Tag**   | \`$IMAGE_TAG\` |"    >> $GITHUB_STEP_SUMMARY
+          echo "| **Build Fresh** | \`$SHOULD_BUILD\` |" >> $GITHUB_STEP_SUMMARY
+
+  build-push:
+    name: Build & Push – ${{ matrix.service }}
+    needs: resolve
+    if: needs.resolve.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ${{ fromJSON(needs.resolve.outputs.services) }}
+      fail-fast: false
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push
+        env:
+          REGISTRY:  ${{ steps.login-ecr.outputs.registry }}
+          ENV_SHORT: ${{ needs.resolve.outputs.env_short }}
+          IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
+          SERVICE:   ${{ matrix.service }}
+        run: |
+          ECR_REPO="${REGISTRY}/cloudmart-${SERVICE}-${ENV_SHORT}"
+          docker build \
+            -t "${ECR_REPO}:${IMAGE_TAG}" \
+            -t "${ECR_REPO}:latest" \
+            "services/${SERVICE}"
+          docker push "${ECR_REPO}:${IMAGE_TAG}"
+          docker push "${ECR_REPO}:latest"
+
+  trivy-scan:
+    name: Trivy Scan – ${{ matrix.service }}
+    needs: [resolve, build-push]
+    if: needs.resolve.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ${{ fromJSON(needs.resolve.outputs.services) }}
+      fail-fast: false
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Trivy – Image Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: >-
+            ${{ steps.login-ecr.outputs.registry }}/cloudmart-${{ matrix.service }}-${{ needs.resolve.outputs.env_short }}:${{ needs.resolve.outputs.image_tag }}
+          format: table
+          severity: CRITICAL
+          exit-code: "1"
+
+  deploy:
+    name: Deploy → ${{ needs.resolve.outputs.namespace }}
+    needs: [resolve, build-push, trivy-scan]
+    if: |
+      always() &&
+      needs.resolve.result == 'success' &&
+      (needs.build-push.result  == 'success' || needs.build-push.result  == 'skipped') &&
+      (needs.trivy-scan.result  == 'success' || needs.trivy-scan.result  == 'skipped')
+    runs-on: ubuntu-latest
+    environment: ${{ needs.resolve.outputs.deploy_env }}
+    steps:
+      - name: Checkout Helm Charts
+        uses: actions/checkout@v4
+        with:
+          repository: CIM-CloudMart/helm-charts
+          path:       helm-charts
+          token:      ${{ secrets.HELM_CHARTS_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Update GitOps Values
+        run: |
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          ENV_SHORT="${{ needs.resolve.outputs.env_short }}"
+          IMAGE_TAG="${{ needs.resolve.outputs.image_tag }}"
+
+          cd helm-charts
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          for SERVICE in $(echo '${{ needs.resolve.outputs.services }}' | jq -r '.[]'); do
+            ECR_REPO="${REGISTRY}/cloudmart-${SERVICE}-${ENV_SHORT}"
+            case "$SERVICE" in
+              user-service)         HELM_KEY="user"         ;;
+              product-service)      HELM_KEY="product"      ;;
+              order-service)        HELM_KEY="order"        ;;
+              notification-service) HELM_KEY="notification" ;;
+              frontend)             HELM_KEY="frontend"     ;;
+            esac
+
+            yq -i ".${HELM_KEY}.image.repository = \"${ECR_REPO}\""  \
+               charts/cloudmart/values-${ENV_SHORT}.yaml
+            yq -i ".${HELM_KEY}.image.tag        = \"${IMAGE_TAG}\"" \
+               charts/cloudmart/values-${ENV_SHORT}.yaml
+            git add charts/cloudmart/values-${ENV_SHORT}.yaml
+          done
+
+          yq -i '.global.registry = ""' charts/cloudmart/values-${ENV_SHORT}.yaml
+          git add charts/cloudmart/values-${ENV_SHORT}.yaml
+
+          SVC_LIST=$(echo '${{ needs.resolve.outputs.services }}' | jq -r 'join(", ")')
+          if git commit -m "chore(gitops): deploy [${SVC_LIST}] → ${IMAGE_TAG} (${{ needs.resolve.outputs.environment }})"; then
+            git push
+          else
+            echo "No values changes."
+          fi
+
+      - name: Update Kubeconfig
+        run: aws eks update-kubeconfig --name cloudmart --region ap-south-1
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Helm Upgrade
+        run: |
+          ENV_SHORT="${{ needs.resolve.outputs.env_short }}"
+          NAMESPACE="${{ needs.resolve.outputs.namespace }}"
+
+          helm upgrade --install cloudmart ./helm-charts/charts/cloudmart \
+            --namespace "${NAMESPACE}" \
+            -f ./helm-charts/charts/cloudmart/values.yaml \
+            -f ./helm-charts/charts/cloudmart/values-${ENV_SHORT}.yaml \
+            --atomic \
+            --timeout 10m
+
+      - name: Wait for Rollouts
+        run: |
+          NAMESPACE="${{ needs.resolve.outputs.namespace }}"
+          for SERVICE in $(echo '${{ needs.resolve.outputs.services }}' | jq -r '.[]'); do
+            kubectl rollout status "deployment/${SERVICE}" -n "${NAMESPACE}" --timeout=300s
+          done
+
+  smoke-test:
+    name: Smoke Tests
+    needs: [resolve, deploy]
+    if: needs.deploy.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Update Kubeconfig
+        run: aws eks update-kubeconfig --name cloudmart --region ap-south-1
+
+      - name: Health Check
+        run: |
+          NAMESPACE="${{ needs.resolve.outputs.namespace }}"
+          declare -A SVC_PORT=(
+            [frontend]=80
+            [product-service]=8001
+            [order-service]=8002
+            [user-service]=8003
+          )
+
+          for SERVICE in $(echo '${{ needs.resolve.outputs.services }}' | jq -r '.[]'); do
+            if [ "$SERVICE" = "notification-service" ]; then
+              continue
+            fi
+            SVC_P="${SVC_PORT[$SERVICE]}"
+            LOCAL_P="1${SVC_P}"
+
+            pkill -f "port-forward svc/${SERVICE}" 2>/dev/null || true
+            sleep 1
+            kubectl port-forward "svc/${SERVICE}" "${LOCAL_P}:${SVC_P}" -n "${NAMESPACE}" >/dev/null 2>&1 &
+            PF_PID=$!
+            sleep 5
+
+            SUCCESS=false
+            for ATTEMPT in 1 2 3; do
+              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "http://localhost:${LOCAL_P}/health" 2>/dev/null || echo "000")
+              if [ "$HTTP_CODE" = "200" ]; then
+                SUCCESS=true
+                break
+              fi
+              sleep 10
+            done
+
+            kill "$PF_PID" 2>/dev/null || true
+            if ! $SUCCESS; then
+              exit 1
+            fi
+          done
+
+  notify:
+    name: Deployment Report
+    needs: [resolve, build-push, trivy-scan, deploy, smoke-test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write Job Summary
+        run: |
+          BUILD_R="${{ needs.build-push.result }}"
+          SCAN_R="${{ needs.trivy-scan.result }}"
+          DEPLOY_R="${{ needs.deploy.result }}"
+          SMOKE_R="${{ needs.smoke-test.result }}"
+
+          icon() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
+
+          echo "## Manual Deployment — ${{ needs.resolve.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Build  | $(icon $BUILD_R) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trivy  | $(icon $SCAN_R) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy | $(icon $DEPLOY_R) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Smoke  | $(icon $SMOKE_R) |" >> $GITHUB_STEP_SUMMARY

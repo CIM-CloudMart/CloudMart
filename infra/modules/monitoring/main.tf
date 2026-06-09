@@ -150,7 +150,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            [ "ContainerInsights", "pod_cpu_utilization", "ClusterName", "cloudmart-eks-${var.environment}", "Namespace", "cloudmart-${var.environment}" ]
+            ["ContainerInsights", "pod_cpu_utilization", "ClusterName", "cloudmart-eks-${var.environment}", "Namespace", "cloudmart-${var.environment}"]
           ],
           period = 300,
           stat   = "Average",
@@ -166,7 +166,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            [ "ContainerInsights", "pod_memory_utilization", "ClusterName", "cloudmart-eks-${var.environment}", "Namespace", "cloudmart-${var.environment}" ]
+            ["ContainerInsights", "pod_memory_utilization", "ClusterName", "cloudmart-eks-${var.environment}", "Namespace", "cloudmart-${var.environment}"]
           ],
           period = 300,
           stat   = "Average",
@@ -182,7 +182,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            [ "AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", var.sqs_queue_name ]
+            ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", var.sqs_queue_name]
           ],
           period = 300,
           stat   = "Maximum",
@@ -198,7 +198,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            [ "AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "cloudmart-postgres-${var.environment}" ]
+            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "cloudmart-postgres-${var.environment}"]
           ],
           period = 300,
           stat   = "Average",
@@ -214,8 +214,8 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            [ "AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "cloudmart-products-${var.environment}" ],
-            [ "AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "cloudmart-products-${var.environment}" ]
+            ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "cloudmart-products-${var.environment}"],
+            ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "cloudmart-products-${var.environment}"]
           ],
           period = 300,
           stat   = "Sum",
@@ -231,7 +231,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            [ "CloudMart", "orders_processed_total", "Environment", var.environment, "Service", "order-service" ]
+            ["CloudMart", "orders_processed_total", "Environment", var.environment, "Service", "order-service"]
           ],
           period = 300,
           stat   = "Sum",
@@ -247,7 +247,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            [ "CloudMart/product-service", "ErrorCount", "Environment", var.environment ]
+            ["CloudMart/product-service", "ErrorCount", "Environment", var.environment]
           ],
           period = 300,
           stat   = "Sum",

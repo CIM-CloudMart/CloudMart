@@ -3,6 +3,13 @@ variable "project" {
   type        = string
 }
 
+variable "cluster_name" {
+  description = "EKS Cluster Name override"
+  type        = string
+  default     = null
+}
+
+
 variable "environment" {
   description = "Deployment environment"
   type        = string

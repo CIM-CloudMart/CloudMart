@@ -28,11 +28,11 @@ resource "aws_route53_health_check" "alb" {
 
 # Primary DNS CNAME Record pointing to ALB
 resource "aws_route53_record" "primary" {
-  count           = var.alb_dns_name != null && var.alb_dns_name != "" ? 1 : 0
-  zone_id         = aws_route53_zone.primary.zone_id
-  name            = "app.${var.domain_name}"
-  type            = "CNAME"
-  ttl             = "60"
+  count   = var.alb_dns_name != null && var.alb_dns_name != "" ? 1 : 0
+  zone_id = aws_route53_zone.primary.zone_id
+  name    = "app.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = "60"
 
   failover_routing_policy {
     type = "PRIMARY"
@@ -45,11 +45,11 @@ resource "aws_route53_record" "primary" {
 
 # Secondary DNS CNAME Record pointing to S3 Website (Error Page)
 resource "aws_route53_record" "secondary" {
-  count           = var.alb_dns_name != null && var.alb_dns_name != "" && var.failover_s3_website_domain != null ? 1 : 0
-  zone_id         = aws_route53_zone.primary.zone_id
-  name            = "app.${var.domain_name}"
-  type            = "CNAME"
-  ttl             = "60"
+  count   = var.alb_dns_name != null && var.alb_dns_name != "" && var.failover_s3_website_domain != null ? 1 : 0
+  zone_id = aws_route53_zone.primary.zone_id
+  name    = "app.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = "60"
 
   failover_routing_policy {
     type = "SECONDARY"

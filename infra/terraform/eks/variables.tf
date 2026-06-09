@@ -5,8 +5,9 @@ variable "project" {
 }
 
 variable "environment" {
-  description = "Deployment environment"
+  description = "Primary deployment environment (used for EKS name prefix)"
   type        = string
+  default     = "prod"
 }
 
 variable "region" {
@@ -16,9 +17,15 @@ variable "region" {
 }
 
 variable "team" {
-  description = "Team name"
+  description = "Team name for tagging and S3 bucket naming"
   type        = string
   default     = "team-axel"
+}
+
+variable "owner_email" {
+  description = "Owner email for mandatory cost/ownership tags"
+  type        = string
+  default     = "admin@cloudmart.example"
 }
 
 variable "vpc_cidr" {
@@ -34,15 +41,15 @@ variable "node_instance_type" {
 }
 
 variable "use_fargate" {
-  description = "Use EKS Fargate (0.25 vCPU per pod) instead of EC2 nodes (2 vCPU each)"
+  description = "Use EKS Fargate instead of EC2 nodes"
   type        = bool
   default     = true
 }
 
 variable "kubernetes_version" {
-  description = "EKS version (prod cluster already on 1.30 — upgrade one minor at a time: 1.31, 1.32, 1.33)"
+  description = "EKS version"
   type        = string
-  default     = "1.30"
+  default     = "1.29"
 }
 
 variable "desired_node_count" {
@@ -52,25 +59,25 @@ variable "desired_node_count" {
 }
 
 variable "enable_guardduty" {
-  description = "Enable GuardDuty (off by default on free-tier accounts)"
+  description = "Enable GuardDuty"
   type        = bool
   default     = false
 }
 
-variable "backup_retention_period" {
-  description = "RDS backup days (free tier: max 1)"
+variable "backup_retention_period_prod" {
+  description = "RDS backup days for production"
+  type        = number
+  default     = 7
+}
+
+variable "backup_retention_period_staging" {
+  description = "RDS backup days for staging"
   type        = number
   default     = 1
 }
 
-variable "owner_email" {
-  description = "Owner email for mandatory cost/ownership tags"
-  type        = string
-  default     = "admin@cloudmart.example"
-}
-
 variable "single_nat_gateway" {
-  description = "Use one shared NAT gateway instead of one per AZ (cost optimization)"
+  description = "Use one shared NAT gateway instead of one per AZ"
   type        = bool
   default     = true
 }
@@ -118,14 +125,7 @@ variable "rds_max_allocated_storage" {
 }
 
 variable "enable_waf" {
-  description = "Enable Web ACL creation (costs ~$25/month, not free-tier eligible)"
+  description = "Enable Web ACL creation"
   type        = bool
   default     = false
 }
-
-variable "alb_dns_name" {
-  description = "The DNS endpoint of the EKS ingress Application Load Balancer"
-  type        = string
-  default     = null
-}
-
