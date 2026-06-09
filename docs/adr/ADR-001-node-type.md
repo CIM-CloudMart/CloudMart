@@ -1,21 +1,14 @@
-# ⚖️ ADR-001: Kubernetes Node Instance Type Selection
+# ADR-001: Kubernetes Node Instance Type Selection
 
-* **Status:** ![Status: Accepted](https://img.shields.io/badge/Status-Accepted-success?style=flat-square)
-* **Date:** 2026-06-08
-* **Deciders:** CloudMart Platform Engineering Team
+## Status
+Accepted
 
----
-
-## 📝 1. Context
-
+## Context
 The CloudMart platform hosts five distinct microservices (frontend, user, product, order, notification) alongside Kubernetes core system controllers, ingress traffic routers, autoscalers, and Prometheus/fluent-bit observability agents. 
 
 During the initial testing phase, deploying these workloads onto `t3.micro` instances resulted in scheduling failures, CPU throttling, and out-of-memory (OOM) pod evictions due to strict resource constraints. The team required a cost-efficient compute tier that could reliably handle the multi-container platform lifecycle.
 
----
-
-## 🚀 2. Decision
-
+## Decision
 We chose **`t3.medium` instances** (2 vCPUs, 4 GiB Memory) as the baseline worker node type for EKS Managed Node Groups.
 
 > [!NOTE]
@@ -24,10 +17,7 @@ We chose **`t3.medium` instances** (2 vCPUs, 4 GiB Memory) as the baseline worke
 > 
 > However, for dedicated VM compute setups, the Terraform variables are pre-configured to provision EKS Managed Node Groups containing `t3.medium` instances as soon as `use_fargate` is set to `false`.
 
----
-
-## 📈 3. Consequences
-
+## Consequences
 ### Positive (Advantages)
 * **Resource Abundance:** Provides ample CPU and memory overhead to prevent container resource starvation and support scale-up tests.
 * **Operational Stability:** Drastically reduces OOM pod crashes and system node instability compared to smaller EC2 classes.
@@ -37,10 +27,7 @@ We chose **`t3.medium` instances** (2 vCPUs, 4 GiB Memory) as the baseline worke
 * **Higher Compute Costs:** Moving from `t3.micro` to `t3.medium` increases the EC2 billing rate from ~$7.50/mo to ~$30.37/mo per node.
 * **Resource Isolation Limits:** Unlike Fargate, multiple microservices share VM kernel capacity; a single unstable pod could theoretically impact neighboring pods without proper resource bounds configured.
 
----
-
-## 🔍 4. Alternatives Considered
-
+## Alternatives Considered
 | Instance Type | Specs (vCPU / RAM) | Assessment |
 | :--- | :--- | :--- |
 | **`t3.micro`** | 1 vCPU / 1 GiB | **Rejected.** Insufficient allocatable memory for basic EKS system pods and application workloads. |
@@ -49,7 +36,7 @@ We chose **`t3.medium` instances** (2 vCPUs, 4 GiB Memory) as the baseline worke
 
 ---
 
-## 🔍 5. Compute Sizing Recommendations Review
+### Compute Sizing Recommendations Review
 
 Under production and staging workloads, we evaluated AWS Compute Optimizer recommendations to optimize cluster cost-efficiency:
 

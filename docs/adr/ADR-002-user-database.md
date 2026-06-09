@@ -1,13 +1,9 @@
-# ⚖️ ADR-002: User Service Database Selection
+# ADR-002: User Service Database Selection
 
-* **Status:** ![Status: Accepted](https://img.shields.io/badge/Status-Accepted-success?style=flat-square)
-* **Date:** 2026-06-08
-* **Deciders:** CloudMart Platform Engineering Team
+## Status
+Accepted
 
----
-
-## 📝 1. Context
-
+## Context
 The **user-service** requires persistent storage for core user schemas including authentication credentials, user profiles, session tokens, and access roles. 
 
 The database solution must:
@@ -16,10 +12,7 @@ The database solution must:
 3. Require minimal administrative overhead for patching, scaling, and backups.
 4. Integrate cleanly with EKS workloads.
 
----
-
-## 🚀 2. Decision
-
+## Decision
 We chose **Amazon RDS PostgreSQL** as the database engine for the `user-service`.
 
 > [!NOTE]
@@ -29,10 +22,7 @@ We chose **Amazon RDS PostgreSQL** as the database engine for the `user-service`
 > * **Storage Resiliency:** Automated storage scaling enabled up to `max_allocated_storage = 20` GB, alongside KMS storage encryption (`storage_encrypted = true`).
 > * **Production Safety:** Production deployments enable `deletion_protection = true` and configure a final snapshot capture.
 
----
-
-## 📈 3. Consequences
-
+## Consequences
 ### Positive (Advantages)
 * **Managed Overhead:** AWS handles hardware provisioning, OS patching, and engine updates.
 * **Continuous Backups:** Built-in automated snapshots (configured in daily windows) allow point-in-time recovery.
@@ -43,10 +33,7 @@ We chose **Amazon RDS PostgreSQL** as the database engine for the `user-service`
 * **Base Cost:** Running RDS PostgreSQL instances is more expensive (~$15.44/mo base) compared to hosting databases inside Kubernetes.
 * **Network Latency:** Traffic crosses network boundaries between EKS worker nodes and RDS subnets, requiring proper security group configuration.
 
----
-
-## 🔍 4. Alternatives Considered
-
+## Alternatives Considered
 | Option | Pros | Cons | Assessment |
 | :--- | :--- | :--- | :--- |
 | **Self-Hosted PostgreSQL (on K8s)** | Zero AWS service fees; unified K8s control. | Requires manual replication, backups, storage management, and patching. | **Rejected.** The operational overhead for stateful pods is too high. |
