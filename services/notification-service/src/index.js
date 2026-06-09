@@ -161,22 +161,24 @@ async function pollCloudQueue() {
   const backend = (process.env.QUEUE_BACKEND || 'memory').toLowerCase();
 
   if (backend === 'sqs') {
-    // TODO: AWS SQS — use @aws-sdk/client-sqs
-    // const { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } = require('@aws-sdk/client-sqs');
-    // const client = new SQSClient({ region: process.env.AWS_REGION });
-    // const response = await client.send(new ReceiveMessageCommand({
-    //   QueueUrl: process.env.SQS_QUEUE_URL,
-    //   MaxNumberOfMessages: 10,
-    //   WaitTimeSeconds: 20,
-    // }));
-    // for (const msg of response.Messages || []) {
-    //   await processOrderEvent(JSON.parse(msg.Body));
-    //   await client.send(new DeleteMessageCommand({
-    //     QueueUrl: process.env.SQS_QUEUE_URL,
-    //     ReceiptHandle: msg.ReceiptHandle,
-    //   }));
-    // }
-    console.log('[SQS] Would poll for messages...');
+    try {
+      const { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } = require('@aws-sdk/client-sqs');
+      const client = new SQSClient({ region: process.env.AWS_REGION || 'ap-south-1' });
+      const response = await client.send(new ReceiveMessageCommand({
+        QueueUrl: process.env.SQS_QUEUE_URL,
+        MaxNumberOfMessages: 10,
+        WaitTimeSeconds: 5,
+      }));
+      for (const msg of response.Messages || []) {
+        await processOrderEvent(JSON.parse(msg.Body));
+        await client.send(new DeleteMessageCommand({
+          QueueUrl: process.env.SQS_QUEUE_URL,
+          ReceiptHandle: msg.ReceiptHandle,
+        }));
+      }
+    } catch (err) {
+      console.error('[SQS] Error polling/processing messages:', err.message);
+    }
   } else if (backend === 'pubsub') {
     // TODO: GCP Pub/Sub — use @google-cloud/pubsub
     // Pub/Sub uses push or streaming pull — implement subscription handler

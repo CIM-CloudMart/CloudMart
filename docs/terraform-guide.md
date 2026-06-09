@@ -1,44 +1,61 @@
-# CloudMart Infrastructure Deployment Guide (Terraform)
+# CloudMart Terraform Deployment Guide
 
-This guide details instructions to provision the AWS infrastructure supporting the CloudMart platform.
-
-> **Free Tier / Cost Management Notice:**
-> - AWS EKS Fargate (`use_fargate = true`) runs pod nodes at **0.25 vCPU** and **512Mi Memory** to avoid standard EC2 Standard vCPU quota issues.
-> - **Security Features Active by Default**: AWS GuardDuty and AWS Security Hub are now enabled in environments `terraform.tfvars` (`enable_guardduty = true`). WAF is configurable via `enable_waf` (WAF regional ACL is not free-tier eligible).
-> - EKS Access Entries are automatically provisioned to authenticate the assumed GitHub Actions IAM Role and local developer roles.
+This guide details how to plan and apply the AWS infrastructure and Kubernetes configuration for the CloudMart platform.
 
 ---
 
-## 1. Staging Environment
-Provision the staging AWS environment:
+## 🛠️ Step 0: Bootstrap Remote State
 
 ```bash
-cd infra/environments/staging
-terraform init -reconfigure
-terraform plan -out=tfplan
-terraform apply tfplan
-```
+# Navigate to the bootstrap directory
+cd infra/bootstrap
 
-### Key Outputs to Record
-- `web_acl_arn`: The ARN of the regional WAF ACL (configure in Helm values if WAF is enabled).
-- `github_actions_role_arn`: Assumed role for the CI/CD pipeline.
-- `eks_cluster_name`: `cloudmart-eks-staging`
-- `rds_endpoint`: PostgreSQL endpoint.
+# Initialize Terraform configuration
+terraform init
+
+# Apply and create the bucket and locking table
+terraform apply -auto-approve
+```
 
 ---
 
-## 2. Production Environment
-Provision the production AWS environment:
+## 🚀 Step 1: Provision Core AWS Infrastructure
+
+The `infra/terraform/eks/` directory provisions the underlying AWS infrastructure including the VPC, EKS cluster, node groups, databases, queues, container registries, and IAM roles.
 
 ```bash
-cd ../prod
-terraform init -reconfigure
-terraform plan -out=tfplan
-terraform apply tfplan
+# Navigate to the EKS infrastructure directory
+cd ../terraform/eks
+
+# Initialize Terraform configuration
+terraform init
+
+# Generate a preview of the changes
+terraform plan -out=eks.tfplan
+
+# Apply the approved changes
+terraform apply eks.tfplan
 ```
 
-### Key Outputs to Record
-- `web_acl_arn`: The WAF ACL ARN for edge filtering.
-- `github_actions_role_arn`: Assumed OIDC role for production CD.
-- `eks_cluster_name`: `cloudmart-eks-prod`
-- `rds_endpoint`: Production database endpoint.
+---
+
+## ☸️ Step 2: Configure Kubernetes & Helm
+
+The `infra/terraform/k8s-config/` directory connects to the newly provisioned EKS cluster to configure namespaces, service accounts (with IRSA annotations), default network policies, and the AWS Load Balancer Controller.
+
+> [!IMPORTANT]
+> Step 1 (EKS core infrastructure provisioning) must be completely applied and active before starting Step 2.
+
+```bash
+# Navigate to the Kubernetes configuration directory
+cd ../k8s-config
+
+# Initialize Terraform configuration
+terraform init
+
+# Generate a preview plan
+terraform plan -out=k8s.tfplan
+
+# Apply the approved changes
+terraform apply k8s.tfplan
+```

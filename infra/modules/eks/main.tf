@@ -3,7 +3,7 @@ module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 21.0"
 
-  name               = "${var.project}-eks-${var.environment}"
+  name               = var.cluster_name != null ? var.cluster_name : "${var.project}-eks-${var.environment}"
   kubernetes_version = var.kubernetes_version
 
   vpc_id     = var.vpc_id
@@ -37,7 +37,8 @@ module "eks" {
     cloudmart = {
       name = "cloudmart"
       selectors = [
-        { namespace = "cloudmart-${var.environment}" }
+        { namespace = "cloudmart-prod" },
+        { namespace = "cloudmart-staging" }
       ]
     }
     external_secrets = {
@@ -79,9 +80,9 @@ module "eks" {
       })
     }
     } : {
-    coredns                      = {}
-    kube-proxy                   = {}
-    vpc-cni                      = {}
+    coredns    = {}
+    kube-proxy = {}
+    vpc-cni    = {}
   }
 
   access_entries = {

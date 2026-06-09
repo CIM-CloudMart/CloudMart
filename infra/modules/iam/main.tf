@@ -25,7 +25,10 @@ data "aws_iam_policy_document" "product_service_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_provider}:sub"
-      values   = ["system:serviceaccount:${local.k8s_namespace}:product-service-sa"]
+      values = [
+        "system:serviceaccount:cloudmart-prod:product-service-sa",
+        "system:serviceaccount:cloudmart-staging:product-service-sa"
+      ]
     }
 
     condition {
@@ -101,7 +104,10 @@ data "aws_iam_policy_document" "order_service_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_provider}:sub"
-      values   = ["system:serviceaccount:${local.k8s_namespace}:order-service-sa"]
+      values = [
+        "system:serviceaccount:cloudmart-prod:order-service-sa",
+        "system:serviceaccount:cloudmart-staging:order-service-sa"
+      ]
     }
 
     condition {
@@ -151,7 +157,10 @@ data "aws_iam_policy_document" "notification_service_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_provider}:sub"
-      values   = ["system:serviceaccount:${local.k8s_namespace}:notification-service-sa"]
+      values = [
+        "system:serviceaccount:cloudmart-prod:notification-service-sa",
+        "system:serviceaccount:cloudmart-staging:notification-service-sa"
+      ]
     }
 
     condition {
@@ -210,7 +219,10 @@ data "aws_iam_policy_document" "user_service_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_provider}:sub"
-      values   = ["system:serviceaccount:${local.k8s_namespace}:user-service-sa"]
+      values = [
+        "system:serviceaccount:cloudmart-prod:user-service-sa",
+        "system:serviceaccount:cloudmart-staging:user-service-sa"
+      ]
     }
 
     condition {

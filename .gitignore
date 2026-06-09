@@ -35,3 +35,4 @@ cleanup_resources.sh
 .env
 
 __pycache__
+**/*.tfplan
