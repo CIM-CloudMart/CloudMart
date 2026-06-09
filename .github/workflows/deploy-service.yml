@@ -178,15 +178,12 @@ jobs:
               frontend)             HELM_KEY="frontend"     ;;
             esac
 
-            yq -i ".${HELM_KEY}.image.repository = \"${ECR_REPO}\""  \
-               charts/cloudmart/values-${ENV_SHORT}.yaml
             yq -i ".${HELM_KEY}.image.tag        = \"${IMAGE_TAG}\"" \
                charts/cloudmart/values-${ENV_SHORT}.yaml
             git add charts/cloudmart/values-${ENV_SHORT}.yaml
           done
 
-          yq -i '.global.registry = ""' charts/cloudmart/values-${ENV_SHORT}.yaml
-          git add charts/cloudmart/values-${ENV_SHORT}.yaml
+
 
           SVC_LIST=$(echo '${{ needs.resolve.outputs.services }}' | jq -r 'join(", ")')
           if git commit -m "chore(gitops): deploy [${SVC_LIST}] → ${IMAGE_TAG} (${{ needs.resolve.outputs.environment }})"; then
