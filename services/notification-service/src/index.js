@@ -24,6 +24,8 @@ const PORT = process.env.PORT || 8004;
 // Service URLs
 const ORDER_SERVICE_URL =
   process.env.ORDER_SERVICE_URL || 'http://order-service:8002';
+const USER_SERVICE_URL =
+  process.env.USER_SERVICE_URL || 'http://user-service:8003';
 
 // Track processed events to avoid duplicates
 const processedEvents = new Set();
@@ -107,8 +109,16 @@ async function processOrderEvent(event) {
       `Thank you for shopping with CloudMart!`,
     ].join('\n');
 
-    // In a real system, we'd look up the user's email from user-service
-    const recipientEmail = `${event.userId}@cloudmart.example`;
+    let recipientEmail = `${event.userId}@cloudmart.example`;
+    try {
+      const userRes = await axios.get(`${USER_SERVICE_URL}/users/${event.userId}`, { timeout: 3000 });
+      if (userRes.data && userRes.data.email) {
+        recipientEmail = userRes.data.email;
+      }
+    } catch (err) {
+      console.error(`[Notification] Could not fetch real email for user ${event.userId}. Falling back to default.`);
+    }
+
     await sendEmail(recipientEmail, subject, body);
 
     console.log(
@@ -124,7 +134,16 @@ async function processOrderEvent(event) {
       `Thank you for shopping with CloudMart!`,
     ].join('\n');
 
-    const recipientEmail = `${event.userId}@cloudmart.example`;
+    let recipientEmail = `${event.userId}@cloudmart.example`;
+    try {
+      const userRes = await axios.get(`${USER_SERVICE_URL}/users/${event.userId}`, { timeout: 3000 });
+      if (userRes.data && userRes.data.email) {
+        recipientEmail = userRes.data.email;
+      }
+    } catch (err) {
+      console.error(`[Notification] Could not fetch real email for user ${event.userId}. Falling back to default.`);
+    }
+
     await sendEmail(recipientEmail, subject, body);
 
     console.log(

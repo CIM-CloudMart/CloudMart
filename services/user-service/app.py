@@ -151,6 +151,38 @@ class PostgresUserStore:
             "createdat": "createdAt",
             "updatedat": "updatedAt"
         }
+        self._init_db()
+
+    def _init_db(self):
+        query = """
+        CREATE TABLE IF NOT EXISTS users (
+            id VARCHAR(50) PRIMARY KEY,
+            email VARCHAR(255) UNIQUE NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            passwordhash VARCHAR(255) NOT NULL,
+            role VARCHAR(50) NOT NULL,
+            address TEXT,
+            createdat VARCHAR(50) NOT NULL,
+            updatedat VARCHAR(50)
+        );
+        """
+        self._execute(query)
+
+        # Hardcode Admin
+        try:
+            admin_email = "admin@example-admin.com"
+            if not self.find_by_email(admin_email):
+                import bcrypt
+                import uuid
+                pwd = bcrypt.hashpw(b"TeamAxel@1234", bcrypt.gensalt()).decode("utf-8")
+                uid = f"user-{uuid.uuid4().hex[:8]}"
+                query_insert = """
+                INSERT INTO users (id, email, name, passwordhash, role, address, createdat)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """
+                self._execute(query_insert, (uid, admin_email, "Admin User", pwd, "admin", "N/A", "2026-06-09T00:00:00Z"))
+        except Exception as e:
+            logger.warning(f"Failed to create admin user: {e}")
 
     def _execute(self, query, params=None, fetch=False, many=False):
         with self.conn.cursor() as cur:
@@ -397,7 +429,7 @@ def get_user(user_id):
     if not user:
         abort(404, description=f"User {user_id} not found")
     # Return limited public info
-    return jsonify({"id": user["id"], "name": user["name"], "createdAt": user["createdAt"]})
+    return jsonify({"id": user["id"], "name": user["name"], "email": user["email"], "createdAt": user["createdAt"]})
 
 
 # ---------------------------------------------------------------------------

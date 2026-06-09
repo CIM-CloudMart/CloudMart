@@ -191,6 +191,25 @@ class DynamoDBStore:
         else:
             self.dynamodb = boto3.resource('dynamodb')
         self.table = self.dynamodb.Table(table_name)
+        
+        # Seed logic
+        try:
+            if not self.get_all():
+                for p in SEED_PRODUCTS:
+                    item = {
+                        'id': p['id'],
+                        'name': p['name'],
+                        'description': p.get('description', ''),
+                        'price': Decimal(str(p['price'])),
+                        'category': p.get('category', 'general'),
+                        'stock': int(p.get('stock', 0)),
+                        'imageUrl': p.get('imageUrl', ''),
+                        'createdAt': p.get('createdAt', datetime.utcnow().isoformat() + 'Z'),
+                    }
+                    self.table.put_item(Item=item)
+                logger.info("Successfully seeded DynamoDB with initial products.")
+        except Exception as e:
+            logger.warning(f"Failed to seed products: {e}")
 
     def _parse_item(self, item):
         """Convert DynamoDB item to plain dict (handles Decimal)."""
