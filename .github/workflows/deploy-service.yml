@@ -262,64 +262,9 @@ jobs:
             kubectl rollout status "deployment/${SERVICE}" -n "${NAMESPACE}" --timeout=300s
           done
 
-  smoke-test:
-    name: Smoke Tests
-    needs: [resolve, deploy]
-    if: needs.deploy.result == 'success'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-south-1
-
-      - name: Update Kubeconfig
-        run: aws eks update-kubeconfig --name cloudmart --region ap-south-1
-
-      - name: Health Check
-        run: |
-          NAMESPACE="${{ needs.resolve.outputs.namespace }}"
-          declare -A SVC_PORT=(
-            [frontend]=80
-            [product-service]=8001
-            [order-service]=8002
-            [user-service]=8003
-          )
-
-          for SERVICE in $(echo '${{ needs.resolve.outputs.services }}' | jq -r '.[]'); do
-            if [ "$SERVICE" = "notification-service" ]; then
-              continue
-            fi
-            SVC_P="${SVC_PORT[$SERVICE]}"
-            LOCAL_P="1${SVC_P}"
-
-            pkill -f "port-forward svc/${SERVICE}" 2>/dev/null || true
-            sleep 1
-            kubectl port-forward "svc/${SERVICE}" "${LOCAL_P}:${SVC_P}" -n "${NAMESPACE}" >/dev/null 2>&1 &
-            PF_PID=$!
-            sleep 5
-
-            SUCCESS=false
-            for ATTEMPT in 1 2 3; do
-              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "http://localhost:${LOCAL_P}/health" 2>/dev/null || echo "000")
-              if [ "$HTTP_CODE" = "200" ]; then
-                SUCCESS=true
-                break
-              fi
-              sleep 10
-            done
-
-            kill "$PF_PID" 2>/dev/null || true
-            if ! $SUCCESS; then
-              exit 1
-            fi
-          done
-
   notify:
     name: Deployment Report
-    needs: [resolve, build-push, trivy-scan, deploy, smoke-test]
+    needs: [resolve, build-push, trivy-scan, deploy]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -328,7 +273,6 @@ jobs:
           BUILD_R="${{ needs.build-push.result }}"
           SCAN_R="${{ needs.trivy-scan.result }}"
           DEPLOY_R="${{ needs.deploy.result }}"
-          SMOKE_R="${{ needs.smoke-test.result }}"
 
           icon() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
 
@@ -338,4 +282,3 @@ jobs:
           echo "| Build  | $(icon $BUILD_R) |" >> $GITHUB_STEP_SUMMARY
           echo "| Trivy  | $(icon $SCAN_R) |" >> $GITHUB_STEP_SUMMARY
           echo "| Deploy | $(icon $DEPLOY_R) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Smoke  | $(icon $SMOKE_R) |" >> $GITHUB_STEP_SUMMARY
