@@ -121,10 +121,8 @@ jobs:
           ECR_REPO="${REGISTRY}/cloudmart-${SERVICE}-${ENV_SHORT}"
           docker build \
             -t "${ECR_REPO}:${IMAGE_TAG}" \
-            -t "${ECR_REPO}:latest" \
             "services/${SERVICE}"
           docker push "${ECR_REPO}:${IMAGE_TAG}"
-          docker push "${ECR_REPO}:latest"
 
 
 
