@@ -194,7 +194,7 @@ data "aws_iam_policy_document" "notification_service_policy" {
       "ses:SendEmail",
       "ses:SendRawEmail"
     ]
-    resources = [var.ses_email_identity_arn]
+    resources = ["*"]
   }
 }
 
