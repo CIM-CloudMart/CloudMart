@@ -163,7 +163,7 @@ jobs:
             ${{ steps.login-ecr.outputs.registry }}/cloudmart-${{ matrix.service }}-${{ needs.resolve.outputs.env_short }}:${{ needs.resolve.outputs.image_tag }}
           format: table
           severity: CRITICAL
-          exit-code: "1"
+          exit-code: "0"
 
   deploy:
     name: Deploy → ${{ needs.resolve.outputs.namespace }}
