@@ -151,6 +151,22 @@ class PostgresUserStore:
             "createdat": "createdAt",
             "updatedat": "updatedAt"
         }
+        self._init_db()
+
+    def _init_db(self):
+        query = """
+        CREATE TABLE IF NOT EXISTS users (
+            id VARCHAR(50) PRIMARY KEY,
+            email VARCHAR(255) UNIQUE NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            passwordhash VARCHAR(255) NOT NULL,
+            role VARCHAR(50) NOT NULL,
+            address TEXT,
+            createdat VARCHAR(50) NOT NULL,
+            updatedat VARCHAR(50)
+        );
+        """
+        self._execute(query)
 
     def _execute(self, query, params=None, fetch=False, many=False):
         with self.conn.cursor() as cur:
