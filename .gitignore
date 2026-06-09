@@ -36,3 +36,6 @@ cleanup_resources.sh
 
 __pycache__
 **/*.tfplan
+*.tfplan
+*.tfplan.*
+*.tfstate.backup
