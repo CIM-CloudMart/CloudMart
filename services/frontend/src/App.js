@@ -120,7 +120,7 @@ function App() {
   const fetchOrders = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await fetch(`${API.orders}`, {
+      const res = await fetch(`${API.orders}?userId=${user.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
