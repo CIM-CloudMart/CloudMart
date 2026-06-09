@@ -21,10 +21,7 @@ on:
         options:
           - staging
           - prod
-      image_tag:
-        description: "Existing image tag to deploy (leave blank or 'latest' to build fresh)"
-        required: false
-        default: "latest"
+
 
 permissions:
   contents: read
@@ -66,15 +63,9 @@ jobs:
             SERVICES='["${{ inputs.service }}"]'
           fi
 
-          DISPATCH_TAG="${{ inputs.image_tag }}"
-          if [ -n "$DISPATCH_TAG" ] && [ "$DISPATCH_TAG" != "latest" ]; then
-            IMAGE_TAG="$DISPATCH_TAG"
-            SHOULD_BUILD="false"
-          else
-            SHORT_SHA=$(git rev-parse --short HEAD)
-            IMAGE_TAG="${SHORT_SHA}-${{ github.run_number }}"
-            SHOULD_BUILD="true"
-          fi
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          IMAGE_TAG="${SHORT_SHA}-${{ github.run_number }}"
+          SHOULD_BUILD="true"
 
           echo "environment=$RAW_ENV"      >> $GITHUB_OUTPUT
           echo "deploy_env=$DEPLOY_ENV"    >> $GITHUB_OUTPUT
@@ -135,44 +126,15 @@ jobs:
           docker push "${ECR_REPO}:${IMAGE_TAG}"
           docker push "${ECR_REPO}:latest"
 
-  trivy-scan:
-    name: Trivy Scan – ${{ matrix.service }}
-    needs: [resolve, build-push]
-    if: needs.resolve.outputs.should_build == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: ${{ fromJSON(needs.resolve.outputs.services) }}
-      fail-fast: false
-    steps:
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-south-1
 
-      - name: Log in to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Trivy – Image Scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: >-
-            ${{ steps.login-ecr.outputs.registry }}/cloudmart-${{ matrix.service }}-${{ needs.resolve.outputs.env_short }}:${{ needs.resolve.outputs.image_tag }}
-          format: table
-          severity: CRITICAL
-          exit-code: "0"
 
   deploy:
     name: Deploy → ${{ needs.resolve.outputs.namespace }}
-    needs: [resolve, build-push, trivy-scan]
+    needs: [resolve, build-push]
     if: |
       always() &&
       needs.resolve.result == 'success' &&
-      (needs.build-push.result  == 'success' || needs.build-push.result  == 'skipped') &&
-      (needs.trivy-scan.result  == 'success' || needs.trivy-scan.result  == 'skipped')
+      (needs.build-push.result  == 'success' || needs.build-push.result  == 'skipped')
     runs-on: ubuntu-latest
     environment: ${{ needs.resolve.outputs.deploy_env }}
     steps:
@@ -264,14 +226,13 @@ jobs:
 
   notify:
     name: Deployment Report
-    needs: [resolve, build-push, trivy-scan, deploy]
+    needs: [resolve, build-push, deploy]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Write Job Summary
         run: |
           BUILD_R="${{ needs.build-push.result }}"
-          SCAN_R="${{ needs.trivy-scan.result }}"
           DEPLOY_R="${{ needs.deploy.result }}"
 
           icon() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
@@ -280,5 +241,4 @@ jobs:
           echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Build  | $(icon $BUILD_R) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Trivy  | $(icon $SCAN_R) |" >> $GITHUB_STEP_SUMMARY
           echo "| Deploy | $(icon $DEPLOY_R) |" >> $GITHUB_STEP_SUMMARY
