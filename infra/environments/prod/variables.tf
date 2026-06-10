@@ -93,3 +93,75 @@ variable "enable_guardduty" {
   type        = bool
   default     = false
 }
+
+variable "vpc_cidr" {
+  description = "CIDR block for the VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "single_nat_gateway" {
+  description = "Whether to use a single NAT gateway"
+  type        = bool
+  default     = false
+}
+
+variable "from_email" {
+  description = "SES sender email"
+  type        = string
+  default     = "no-reply@cloudmart.com"
+}
+
+variable "use_fargate" {
+  description = "Deploy workloads on Fargate"
+  type        = bool
+  default     = false
+}
+
+variable "kubernetes_version" {
+  description = "Kubernetes version for EKS"
+  type        = string
+  default     = "1.27"
+}
+
+variable "node_instance_type" {
+  description = "EC2 instance type for worker nodes"
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "desired_node_count" {
+  description = "Desired number of worker nodes"
+  type        = number
+  default     = 2
+}
+
+variable "enable_waf" {
+  description = "Enable AWS WAF"
+  type        = bool
+  default     = false
+}
+
+variable "domain_name" {
+  description = "Root domain name for Route53"
+  type        = string
+  default     = "example.com"
+}
+
+variable "limit_amount" {
+  description = "Budget limit amount"
+  type        = number
+  default     = 1000
+}
+
+variable "subscriber_emails" {
+  description = "Emails to receive budget alerts"
+  type        = list(string)
+  default     = []
+}
+
+variable "enable_guardduty" {
+  description = "Enable GuardDuty monitoring"
+  type        = bool
+  default     = false
+}

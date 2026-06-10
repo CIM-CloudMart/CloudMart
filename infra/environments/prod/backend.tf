@@ -1,10 +1,9 @@
-// Remote state backend for prod environment
 terraform {
   backend "s3" {
-    bucket         = "${var.project}-tfstate-${var.team}"
+    bucket         = "cloudmart-tfstate-team-axel"
     key            = "environments/prod/terraform.tfstate"
-    region         = var.region
-    dynamodb_table = "${var.project}-tfstate-lock"
+    region         = "ap-south-1"
+    dynamodb_table = "cloudmart-tfstate-lock"
     encrypt        = true
   }
 }
