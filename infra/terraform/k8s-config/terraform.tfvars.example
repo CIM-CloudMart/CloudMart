@@ -1,5 +1,0 @@
-project     = "cloudmart"
-environment = "prod"
-region      = "ap-south-1"
-team        = "team-name"
-owner_email = "admin@example.com"
