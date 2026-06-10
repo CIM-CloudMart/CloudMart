@@ -49,7 +49,7 @@ variable "instance_class" {
 variable "multi_az" {
   description = "Specifies if the RDS instance is Multi-AZ"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "max_allocated_storage" {
