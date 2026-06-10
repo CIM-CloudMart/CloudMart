@@ -34,5 +34,7 @@ cleanup_resources.sh
 # Excluse .env files
 .env
 
+docs/disaster-recovery-assessment.md
+
 __pycache__
 **/*.tfplan

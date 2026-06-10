@@ -65,10 +65,10 @@ variable "engine_version" {
 }
 
 variable "backup_retention_period" {
-  description = "RDS backup retention days (free tier accounts: use 0 or 1)"
+  description = "Backup retention days derived from disaster-recovery rpo_backup_hours (converted to days)"
   type        = number
-  default     = 1
 }
+
 
 
 
@@ -83,3 +83,4 @@ variable "db_password" {
   type        = string
   sensitive   = true
 }
+
