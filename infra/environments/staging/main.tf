@@ -1,5 +1,55 @@
 # Staging environment resources
 
+provider "aws" {
+  alias  = "staging"
+  region = var.region
+}
+
+module "vpc" {
+  source             = "../../modules/vpc"
+  project            = var.project
+  environment        = "staging"
+  vpc_cidr           = var.vpc_cidr
+  region             = var.region
+  team               = var.team
+  cluster_name       = "cloudmart"
+  single_nat_gateway = var.single_nat_gateway
+  providers          = { aws = aws.staging }
+}
+
+module "kms" {
+  source      = "../../modules/kms"
+  project     = var.project
+  environment = "staging"
+  providers   = { aws = aws.staging }
+}
+
+module "ses" {
+  source      = "../../modules/ses"
+  project     = var.project
+  environment = "staging"
+  from_email  = var.from_email
+  providers   = { aws = aws.staging }
+}
+
+module "eks" {
+  source                          = "../../modules/eks"
+  project                         = var.project
+  environment                     = "staging"
+  cluster_name                    = "cloudmart"
+  vpc_id                          = module.vpc.vpc_id
+  private_app_subnet_ids          = module.vpc.private_app_subnet_ids
+  use_fargate                     = var.use_fargate
+  kubernetes_version              = var.kubernetes_version
+  node_instance_type              = var.node_instance_type
+  desired_node_count              = var.desired_node_count
+  team                            = var.team
+  kms_key_id                      = module.kms.key_arn
+  cluster_endpoint_public_access  = true
+  cluster_endpoint_private_access = true
+  providers                       = { aws = aws.staging }
+}
+
 module "secrets_manager_staging" {
   source      = "../../modules/secrets-manager"
   project     = var.project
@@ -56,7 +106,7 @@ module "rds_staging" {
   db_password             = module.secrets_manager_staging.db_password
   db_username             = module.secrets_manager_staging.db_username
   instance_class          = var.rds_instance_class
-  multi_az                = var.rds_multi_az
+  multi_az                = !(var.rds_multi_az)
   max_allocated_storage   = var.rds_max_allocated_storage
   backup_retention_period = var.backup_retention_period_staging
   bastion_sg_id           = module.vpc.bastion_security_group_id
