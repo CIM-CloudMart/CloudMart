@@ -72,6 +72,11 @@ module "security" {
   enable_security_hub = false
 }
 
+module "disaster_recovery" {
+  source = "../../modules/disaster-recovery"
+}
+
+
 # ==================== Production Environment Resources ====================
 
 module "secrets_manager_prod" {
@@ -129,6 +134,7 @@ module "rds_prod" {
   max_allocated_storage   = var.rds_max_allocated_storage
   backup_retention_period = var.backup_retention_period_prod
   bastion_sg_id           = module.vpc.bastion_security_group_id
+
 }
 
 module "iam_prod" {
