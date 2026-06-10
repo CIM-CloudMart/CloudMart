@@ -35,6 +35,7 @@ cleanup_resources.sh
 .env
 
 docs/disaster-recovery-assessment.md
+docs/COMMANDS.md
 
 __pycache__
 **/*.tfplan
