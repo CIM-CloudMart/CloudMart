@@ -1,0 +1,183 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: manifest-exporter
+  namespace: backup-system
+  labels:
+    app.kubernetes.io/name: manifest-exporter
+    app.kubernetes.io/part-of: velero-backup
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manifest-reader
+  labels:
+    app.kubernetes.io/name: manifest-reader
+    app.kubernetes.io/part-of: velero-backup
+rules:
+  - apiGroups:
+      - ""
+      - apps
+      - batch
+      - networking.k8s.io
+      - autoscaling
+      - policy
+      - rbac.authorization.k8s.io
+      - storage.k8s.io
+    resources: ["*"]
+    verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: manifest-exporter-binding
+  labels:
+    app.kubernetes.io/name: manifest-exporter
+    app.kubernetes.io/part-of: velero-backup
+subjects:
+  - kind: ServiceAccount
+    name: manifest-exporter
+    namespace: backup-system
+roleRef:
+  kind: ClusterRole
+  name: manifest-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: k8s-manifest-git-export
+  namespace: backup-system
+  labels:
+    app.kubernetes.io/name: k8s-manifest-git-export
+    app.kubernetes.io/part-of: velero-backup
+spec:
+  schedule: "0 */6 * * *"           # Every 6 hours (synced with Velero schedule)
+  concurrencyPolicy: Forbid          # Only one job at a time
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 600     # 10 minute timeout
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: k8s-manifest-git-export
+        spec:
+          serviceAccountName: manifest-exporter
+          restartPolicy: OnFailure
+          containers:
+            - name: exporter
+              image: bitnami/kubectl:1.31
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -euo pipefail
+
+                  TIMESTAMP=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
+                  GIT_REPO="git@github.com:CIM-CloudMart/CloudMart.git"
+                  GIT_BRANCH="k8s-manifest-backup"
+                  EXPORT_DIR="/tmp/k8s-export"
+
+                  echo "K8s manifest export starting: ${TIMESTAMP}"
+
+                  # ── SSH setup for Git ──
+                  mkdir -p ~/.ssh
+                  cp /etc/git-secret/ssh-privatekey ~/.ssh/id_ed25519
+                  chmod 600 ~/.ssh/id_ed25519
+                  ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+                  # ── Clone repo ──
+                  git clone --depth 1 --branch "${GIT_BRANCH}" "${GIT_REPO}" "${EXPORT_DIR}" 2>/dev/null || {
+                    echo " Branch '${GIT_BRANCH}' not found, creating..."
+                    git clone --depth 1 "${GIT_REPO}" "${EXPORT_DIR}"
+                    cd "${EXPORT_DIR}" && git checkout -b "${GIT_BRANCH}"
+                  }
+                  cd "${EXPORT_DIR}"
+
+                  # ── Clean previous export ──
+                  rm -rf backups/k8s/manifests/
+
+                  # ── Namespaced resources export ──
+                  RESOURCES="deployments,statefulsets,daemonsets,services,configmaps,secrets,ingresses,cronjobs,jobs,persistentvolumeclaims,horizontalpodautoscalers,networkpolicies,serviceaccounts"
+
+                  SKIP_NS="kube-system kube-public kube-node-lease velero backup-system"
+
+                  for NS in $(kubectl get ns -o jsonpath='{.items[*].metadata.name}'); do
+                    # Skip system namespaces
+                    if echo "${SKIP_NS}" | grep -qw "${NS}"; then
+                      continue
+                    fi
+
+                    echo "Exporting namespace: ${NS}"
+                    OUTDIR="backups/k8s/manifests/${NS}"
+                    mkdir -p "${OUTDIR}"
+
+                    for RESOURCE in $(echo "${RESOURCES}" | tr ',' ' '); do
+                      OUTPUT=$(kubectl get "${RESOURCE}" -n "${NS}" -o yaml 2>/dev/null || true)
+                      if [ -n "${OUTPUT}" ] && echo "${OUTPUT}" | grep -q "^  - apiVersion:" 2>/dev/null; then
+                        ITEM_COUNT=$(echo "${OUTPUT}" | grep -c "^  - apiVersion:" || true)
+                        echo "${OUTPUT}" > "${OUTDIR}/${RESOURCE}.yaml"
+                        echo " ${RESOURCE}: ${ITEM_COUNT} items"
+                      fi
+                    done
+                  done
+
+                  # ── Cluster-scoped resources ──
+                  echo "Exporting cluster-scoped resources"
+                  CLUSTER_DIR="backups/k8s/manifests/_cluster"
+                  mkdir -p "${CLUSTER_DIR}"
+
+                  for CR in clusterroles clusterrolebindings storageclasses persistentvolumes ingressclasses; do
+                    OUTPUT=$(kubectl get "${CR}" -o yaml 2>/dev/null || true)
+                    if [ -n "${OUTPUT}" ]; then
+                      echo "${OUTPUT}" > "${CLUSTER_DIR}/${CR}.yaml"
+                    fi
+                  done
+
+                  # ── Backup metadata ──
+                  cat > backups/k8s/manifests/BACKUP_METADATA.yaml <<EOF
+                  backup_timestamp: "${TIMESTAMP}"
+                  cluster: "cloudmart"
+                  kubernetes_version: "$(kubectl version -o json 2>/dev/null | grep -o '"gitVersion":"[^"]*"' | head -1 || echo 'unknown')"
+                  velero_last_backup: "$(kubectl get backups.velero.io -n velero --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}' 2>/dev/null || echo 'N/A')"
+                  EOF
+
+                  # ── Git commit & push ──
+                  git config user.email "velero-bot@cloudmart.io"
+                  git config user.name "Velero Backup Bot"
+                  git add -A backups/k8s/manifests/
+
+                  if git diff --cached --quiet; then
+                    echo "No changes detected — skipping commit"
+                  else
+                    CHANGED=$(git diff --cached --stat | tail -1)
+                    git commit -m "K8s manifest backup: ${TIMESTAMP}" \
+                               -m "Changes: ${CHANGED}"
+                    git push origin "${GIT_BRANCH}"
+                    echo "Manifests pushed to branch: ${GIT_BRANCH}"
+                  fi
+
+                  echo "Export complete: ${TIMESTAMP}"
+              resources:
+                requests:
+                  memory: 64Mi
+                  cpu: 50m
+                limits:
+                  memory: 256Mi
+                  cpu: 200m
+              volumeMounts:
+                - name: git-secret
+                  mountPath: /etc/git-secret
+                  readOnly: true
+          volumes:
+            - name: git-secret
+              secret:
+                secretName: git-ssh-key
+                defaultMode: 0400

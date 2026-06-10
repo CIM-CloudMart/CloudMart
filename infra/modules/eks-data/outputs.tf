@@ -22,3 +22,8 @@ output "cluster_certificate_authority_data" {
   description = "EKS Cluster CA certificate data"
   value       = data.aws_eks_cluster.shared.certificate_authority[0].data
 }
+
+output "oidc_provider_arn" {
+  description = "ARN of the EKS OIDC provider (for IRSA)"
+  value       = data.aws_iam_openid_connect_provider.shared.arn
+}

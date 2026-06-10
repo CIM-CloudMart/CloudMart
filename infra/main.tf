@@ -63,3 +63,20 @@ module "security" {
 module "disaster_recovery" {
   source = "./modules/disaster-recovery"
 }
+
+# Velero Backup - S3 bucket + IAM Role for Kubernetes manifest & volume backups
+
+locals {
+  # Strip "https://" from the OIDC URL — required for IAM trust policy conditions
+  oidc_provider_url_stripped = replace(module.eks.oidc_provider_url, "https://", "")
+}
+
+module "velero_backup" {
+  source                    = "./modules/velero-backup"
+  project                   = var.project
+  environment               = var.environment
+  team                      = var.team
+  kms_key_arn               = module.kms.key_arn
+  oidc_provider_arn         = module.eks.oidc_provider_arn
+  oidc_provider_url_stripped = local.oidc_provider_url_stripped
+}
