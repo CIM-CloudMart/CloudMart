@@ -67,7 +67,7 @@ variable "desired_node_count" {
 variable "enable_waf" {
   description = "Enable AWS WAF"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "domain_name" {

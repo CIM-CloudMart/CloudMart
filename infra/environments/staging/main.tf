@@ -127,3 +127,21 @@ module "monitoring_staging" {
   subscriber_emails = var.subscriber_emails
   providers         = { aws = aws.staging }
 }
+
+module "waf" {
+  source      = "../../modules/waf"
+  project     = var.project
+  environment = "staging"
+  enable_waf  = var.enable_waf
+  providers   = { aws = aws.staging }
+}
+
+module "security" {
+  source              = "../../modules/security"
+  project             = var.project
+  environment         = "staging"
+  vpc_id              = module.vpc.vpc_id
+  enable_guardduty    = var.enable_guardduty
+  enable_security_hub = false
+  providers           = { aws = aws.staging }
+}
