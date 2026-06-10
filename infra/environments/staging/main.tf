@@ -33,21 +33,9 @@ module "ses" {
 }
 
 module "eks" {
-  source                          = "../../modules/eks"
-  project                         = var.project
-  environment                     = "staging"
-  cluster_name                    = "cloudmart"
-  vpc_id                          = module.vpc.vpc_id
-  private_app_subnet_ids          = module.vpc.private_app_subnet_ids
-  use_fargate                     = var.use_fargate
-  kubernetes_version              = var.kubernetes_version
-  node_instance_type              = var.node_instance_type
-  desired_node_count              = var.desired_node_count
-  team                            = var.team
-  kms_key_id                      = module.kms.key_arn
-  cluster_endpoint_public_access  = true
-  cluster_endpoint_private_access = true
-  providers                       = { aws = aws.staging }
+  source       = "../../modules/eks-data"
+  cluster_name = "cloudmart"
+  providers    = { aws = aws.staging }
 }
 
 module "secrets_manager_staging" {
@@ -100,13 +88,13 @@ module "rds_staging" {
   environment             = "staging"
   vpc_id                  = module.vpc.vpc_id
   private_data_subnet_ids = module.vpc.private_data_subnet_ids
-  eks_cluster_sg_id       = module.eks.cluster_security_group_id
+  eks_cluster_sg_id       = null
   kms_key_arn             = module.kms.key_arn
   db_secret_arn           = module.secrets_manager_staging.secret_arn
   db_password             = module.secrets_manager_staging.db_password
   db_username             = module.secrets_manager_staging.db_username
   instance_class          = var.rds_instance_class
-  multi_az                = !(var.rds_multi_az)
+  multi_az                = var.rds_multi_az
   max_allocated_storage   = var.rds_max_allocated_storage
   backup_retention_period = var.backup_retention_period_staging
   bastion_sg_id           = module.vpc.bastion_security_group_id

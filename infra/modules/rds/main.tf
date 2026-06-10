@@ -12,12 +12,15 @@ resource "aws_security_group" "rds_sg" {
   vpc_id      = var.vpc_id
   description = "Security group for RDS PostgreSQL"
 
-  ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [var.eks_cluster_sg_id]
-    description     = "Allow PostgreSQL from EKS (Fargate pods or worker nodes)"
+  dynamic "ingress" {
+    for_each = var.eks_cluster_sg_id != null ? [var.eks_cluster_sg_id] : []
+    content {
+      description     = "Allow PostgreSQL from EKS (Fargate pods or worker nodes)"
+      from_port       = 5432
+      to_port         = 5432
+      protocol        = "tcp"
+      security_groups = [ingress.value]
+    }
   }
 
   dynamic "ingress" {

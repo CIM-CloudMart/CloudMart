@@ -9,5 +9,5 @@ output "name_servers" {
 }
 output "error_page_website_endpoint" {
   description = "S3 static website endpoint for error page"
-  value       = aws_s3_bucket.error_page.website_endpoint
+  value       = aws_s3_bucket_website_configuration.error_page.website_endpoint
 }

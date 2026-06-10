@@ -25,20 +25,8 @@ module "ses" {
 }
 
 module "eks" {
-  source                          = "./modules/eks"
-  project                         = var.project
-  environment                     = var.environment
-  cluster_name                    = "cloudmart"
-  vpc_id                          = module.vpc.vpc_id
-  private_app_subnet_ids          = module.vpc.private_app_subnet_ids
-  use_fargate                     = var.use_fargate
-  kubernetes_version              = var.kubernetes_version
-  node_instance_type              = var.node_instance_type
-  desired_node_count              = var.desired_node_count
-  team                            = var.team
-  kms_key_id                      = module.kms.key_arn
-  cluster_endpoint_public_access  = true
-  cluster_endpoint_private_access = true
+  source       = "./modules/eks-data"
+  cluster_name = "cloudmart"
 }
 
 module "waf" {

@@ -49,7 +49,7 @@ variable "use_fargate" {
 variable "kubernetes_version" {
   description = "Kubernetes version for EKS"
   type        = string
-  default     = "1.30"
+  default     = "1.27"
 }
 
 variable "node_instance_type" {
@@ -73,7 +73,7 @@ variable "enable_waf" {
 variable "domain_name" {
   description = "Root domain name for Route53"
   type        = string
-  default     = "cloudmart.example"
+  default     = "example.com"
 }
 
 variable "limit_amount" {
@@ -93,4 +93,3 @@ variable "enable_guardduty" {
   type        = bool
   default     = false
 }
-

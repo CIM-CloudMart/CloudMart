@@ -49,13 +49,13 @@ variable "use_fargate" {
 variable "kubernetes_version" {
   description = "Kubernetes version for EKS"
   type        = string
-  default     = "1.27"
+  default     = "1.30"
 }
 
 variable "node_instance_type" {
   description = "EC2 instance type for worker nodes"
   type        = string
-  default     = "t3.medium"
+  default     = "t3.micro"
 }
 
 variable "desired_node_count" {
@@ -115,5 +115,5 @@ variable "rds_max_allocated_storage" {
 variable "backup_retention_period_staging" {
   description = "Backup retention days for staging"
   type        = number
-  default     = 7
+  default     = 1
 }

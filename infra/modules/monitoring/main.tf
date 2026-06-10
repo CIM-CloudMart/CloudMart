@@ -154,7 +154,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           ],
           period = 300,
           stat   = "Average",
-          region = data.aws_region.current.name,
+          region = data.aws_region.current.region,
           title  = "Pod CPU Utilization (%)"
         }
       },
@@ -170,7 +170,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           ],
           period = 300,
           stat   = "Average",
-          region = data.aws_region.current.name,
+          region = data.aws_region.current.region,
           title  = "Pod Memory Utilization (%)"
         }
       },
@@ -186,7 +186,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           ],
           period = 300,
           stat   = "Maximum",
-          region = data.aws_region.current.name,
+          region = data.aws_region.current.region,
           title  = "SQS Queue Depth (Order Events)"
         }
       },
@@ -202,7 +202,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           ],
           period = 300,
           stat   = "Average",
-          region = data.aws_region.current.name,
+          region = data.aws_region.current.region,
           title  = "RDS Database Connections"
         }
       },
@@ -219,7 +219,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           ],
           period = 300,
           stat   = "Sum",
-          region = data.aws_region.current.name,
+          region = data.aws_region.current.region,
           title  = "DynamoDB Consumed Throughput"
         }
       },
@@ -235,7 +235,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           ],
           period = 300,
           stat   = "Sum",
-          region = data.aws_region.current.name,
+          region = data.aws_region.current.region,
           title  = "Orders Processed (Custom EMF Metric)"
         }
       },
@@ -251,7 +251,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           ],
           period = 300,
           stat   = "Sum",
-          region = data.aws_region.current.name,
+          region = data.aws_region.current.region,
           title  = "Product Service Errors (Metric Filter)"
         }
       },
@@ -263,7 +263,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           query  = "SOURCE '/aws/vpc-flow-log/cloudmart-${var.environment}' | filter action = 'REJECT' | stats count(*) by srcAddr, dstAddr, dstPort | sort count(*) desc | limit 20",
-          region = data.aws_region.current.name,
+          region = data.aws_region.current.region,
           title  = "Rejected VPC Flow Logs (Top Sources & Ports)"
         }
       }

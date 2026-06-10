@@ -21,6 +21,7 @@ variable "private_data_subnet_ids" {
 variable "eks_cluster_sg_id" {
   description = "EKS cluster security group ID (Fargate pods or worker nodes)"
   type        = string
+  default     = null
 }
 
 variable "kms_key_arn" {

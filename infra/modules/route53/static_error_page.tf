@@ -1,11 +1,15 @@
 resource "aws_s3_bucket" "error_page" {
   bucket = "${var.project}-${var.environment}-error-page"
-  website {
-    index_document = "error.html"
-  }
   tags = {
     Name        = "${var.project}-error-page"
     Environment = var.environment
+  }
+}
+
+resource "aws_s3_bucket_website_configuration" "error_page" {
+  bucket = aws_s3_bucket.error_page.id
+  index_document {
+    suffix = "error.html"
   }
 }
 
@@ -37,7 +41,7 @@ resource "aws_s3_bucket_policy" "error_page_public" {
   })
 }
 
-resource "aws_s3_bucket_object" "error_page_html" {
+resource "aws_s3_object" "error_page_html" {
   bucket       = aws_s3_bucket.error_page.id
   key          = "error.html"
   source       = "${path.module}/static/error.html"

@@ -56,5 +56,5 @@ resource "aws_route53_record" "secondary" {
   }
 
   set_identifier = "secondary"
-  records        = [aws_s3_bucket.error_page.website_endpoint]
+  records        = [aws_s3_bucket_website_configuration.error_page.website_endpoint]
 }
