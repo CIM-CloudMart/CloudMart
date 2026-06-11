@@ -109,6 +109,7 @@ module "iam_staging" {
   oidc_url               = module.eks.oidc_provider_url
   kubernetes_namespace   = "cloudmart-staging"
   dynamodb_table_arn     = module.dynamodb_staging.dynamodb_table_arn
+  dynamodb_events_table_arn = module.dynamodb_staging.dynamodb_events_table_arn
   sqs_queue_arn          = module.sqs_staging.queue_arn
   storage_bucket_arn     = module.s3_staging.bucket_arn
   ses_email_identity_arn = module.ses.ses_email_identity_arn

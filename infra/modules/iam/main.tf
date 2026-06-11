@@ -187,7 +187,19 @@ data "aws_iam_policy_document" "notification_service_policy" {
     ]
     resources = [var.sqs_queue_arn]
   }
-
+ statement {
+    effect = "Allow"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+      "dynamodb:DeleteItem",
+      "dynamodb:Query",
+      "dynamodb:Scan"
+    ]
+    resources = [var.dynamodb_events_table_arn]
+  }
+  
   statement {
     effect = "Allow"
     actions = [

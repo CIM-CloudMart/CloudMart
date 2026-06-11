@@ -54,8 +54,8 @@ module "eks" {
       name            = "main"
       use_name_prefix = false
       instance_types  = [var.node_instance_type]
-      min_size        = var.desired_node_count
-      max_size        = var.desired_node_count
+      min_size        = 2
+      max_size        = 5
       desired_size    = var.desired_node_count
       capacity_type   = "ON_DEMAND"
 
