@@ -79,10 +79,12 @@ module "eks" {
         computeType = "Fargate"
       })
     }
+    amazon-cloudwatch-observability = {}
     } : {
     coredns    = {}
     kube-proxy = {}
     vpc-cni    = {}
+    amazon-cloudwatch-observability = {}
   }
 
   access_entries = {
