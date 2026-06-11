@@ -1,0 +1,221 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  lint-test:
+    name: Lint & Test - ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [frontend, order-service, product-service, user-service, notification-service]
+      fail-fast: false
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        if: matrix.service == 'frontend' || matrix.service == 'order-service' || matrix.service == 'notification-service'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install & Test Node.js Services
+        if: matrix.service == 'frontend' || matrix.service == 'order-service' || matrix.service == 'notification-service'
+        working-directory: services/${{ matrix.service }}
+        run: |
+          npm ci || npm install
+          npm run lint --if-present
+          npm test --if-present
+
+      - name: Setup Python
+        if: matrix.service == 'product-service' || matrix.service == 'user-service'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install & Test Python Services
+        if: matrix.service == 'product-service' || matrix.service == 'user-service'
+        working-directory: services/${{ matrix.service }}
+        run: |
+          pip install flake8 pytest
+          pip install -r requirements.txt || true
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
+          pytest || true
+
+  manifest-validation:
+    name: Kubeconform Manifest Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Helm Charts
+        uses: actions/checkout@v4
+        with:
+          repository: CIM-CloudMart/helm-charts
+          path: helm-charts
+          token: ${{ secrets.HELM_CHARTS_PAT || secrets.GITHUB_TOKEN }}
+      
+      - name: Install Kubeconform
+        run: |
+          wget https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz
+          tar xf kubeconform-linux-amd64.tar.gz
+          sudo mv kubeconform /usr/local/bin/
+
+      - name: Validate Staging Manifests
+        run: |
+          helm template cloudmart-staging ./helm-charts/charts/cloudmart \
+            -f ./helm-charts/charts/cloudmart/values.yaml \
+            -f ./helm-charts/charts/cloudmart/values-staging.yaml | kubeconform -strict -summary
+
+      - name: Validate Production Manifests
+        run: |
+          helm template cloudmart-prod ./helm-charts/charts/cloudmart \
+            -f ./helm-charts/charts/cloudmart/values.yaml \
+            -f ./helm-charts/charts/cloudmart/values-prod.yaml | kubeconform -strict -summary
+
+  build-scan-push:
+    name: Build, Scan & Push - ${{ matrix.service }}
+    needs: [lint-test, manifest-validation]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [frontend, order-service, product-service, user-service, notification-service]
+      fail-fast: false
+    outputs:
+      image_tag: ${{ steps.vars.outputs.image_tag }}
+      env_short: ${{ steps.vars.outputs.env_short }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set Variables
+        id: vars
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "env_short=prod" >> $GITHUB_OUTPUT
+          else
+            echo "env_short=staging" >> $GITHUB_OUTPUT
+          fi
+          echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Build Docker Image
+        run: |
+          docker build -t local-image:latest services/${{ matrix.service }}
+
+      - name: Trivy Vulnerability Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'local-image:latest'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL'
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Tag and Push to ECR
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ENV_SHORT: ${{ steps.vars.outputs.env_short }}
+          IMAGE_TAG: ${{ steps.vars.outputs.image_tag }}
+          SERVICE: ${{ matrix.service }}
+        run: |
+          ECR_REPO="${REGISTRY}/cloudmart-${SERVICE}-${ENV_SHORT}"
+          docker tag local-image:latest "${ECR_REPO}:${IMAGE_TAG}"
+          docker push "${ECR_REPO}:${IMAGE_TAG}"
+
+  deploy:
+    name: Deploy to ${{ github.ref == 'refs/heads/main' && 'Production' || 'Staging' }}
+    needs: build-scan-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set Environment Variables
+        id: env
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "ENV_SHORT=prod" >> $GITHUB_ENV
+            echo "NAMESPACE=cloudmart-prod" >> $GITHUB_ENV
+            echo "RELEASE_NAME=cloudmart" >> $GITHUB_ENV
+          else
+            echo "ENV_SHORT=staging" >> $GITHUB_ENV
+            echo "NAMESPACE=cloudmart-staging" >> $GITHUB_ENV
+            echo "RELEASE_NAME=cloudmart-staging" >> $GITHUB_ENV
+          fi
+
+      - name: Checkout Helm Charts
+        uses: actions/checkout@v4
+        with:
+          repository: CIM-CloudMart/helm-charts
+          path: helm-charts
+          token: ${{ secrets.HELM_CHARTS_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Update GitOps Values
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+          cd helm-charts
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          IMAGE_TAG="${{ github.sha }}"
+
+          SERVICES="user product order notification frontend"
+          for SERVICE in $SERVICES; do
+            yq -i ".${SERVICE}.image.tag = \"${IMAGE_TAG}\"" charts/cloudmart/values-${{ env.ENV_SHORT }}.yaml
+            git add charts/cloudmart/values-${{ env.ENV_SHORT }}.yaml
+          done
+
+          if git commit -m "chore(gitops): deploy to ${{ env.ENV_SHORT }} with tag ${IMAGE_TAG}"; then
+            git push
+          else
+            echo "No values changes."
+          fi
+
+      - name: Update Kubeconfig
+        run: aws eks update-kubeconfig --name cloudmart --region ap-south-1
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Helm Upgrade (Rolling Update with Health-Check Gate)
+        run: |
+          helm upgrade --install "${{ env.RELEASE_NAME }}" ./helm-charts/charts/cloudmart \
+            --namespace "${{ env.NAMESPACE }}" \
+            -f ./helm-charts/charts/cloudmart/values.yaml \
+            -f ./helm-charts/charts/cloudmart/values-${{ env.ENV_SHORT }}.yaml \
+            --atomic \
+            --timeout 10m
+
+      - name: Wait for Rollouts (Health-Check Gate)
+        run: |
+          SERVICES="user-service product-service order-service notification-service frontend"
+          for SERVICE in $SERVICES; do
+            kubectl rollout status "deployment/${SERVICE}" -n "${{ env.NAMESPACE }}" --timeout=300s
+          done

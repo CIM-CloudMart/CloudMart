@@ -43,7 +43,7 @@ variable "from_email" {
 variable "use_fargate" {
   description = "Deploy workloads on Fargate"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "kubernetes_version" {
@@ -92,4 +92,34 @@ variable "enable_guardduty" {
   description = "Enable GuardDuty monitoring"
   type        = bool
   default     = false
+}
+
+variable "rds_instance_class" {
+  description = "The database instance class"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "rds_multi_az" {
+  description = "Whether the RDS instance should be Multi‑AZ"
+  type        = bool
+  default     = true
+}
+
+variable "rds_max_allocated_storage" {
+  description = "The upper limit for RDS storage autoscaling"
+  type        = number
+  default     = 20
+}
+
+variable "backup_retention_period" {
+  description = "Backup retention days"
+  type        = number
+  default     = 1
+}
+
+variable "alb_dns_name" {
+  description = "The DNS name of the ALB from ingress"
+  type        = string
+  default     = null
 }

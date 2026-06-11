@@ -68,6 +68,7 @@ resource "aws_db_instance" "postgres" {
   allocated_storage     = 20
   max_allocated_storage = var.max_allocated_storage
   multi_az              = var.multi_az
+  apply_immediately     = true
 
   db_name  = "cloudmart"
   username = var.db_username

@@ -43,7 +43,7 @@ variable "from_email" {
 variable "use_fargate" {
   description = "Deploy workloads on Fargate"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "kubernetes_version" {
