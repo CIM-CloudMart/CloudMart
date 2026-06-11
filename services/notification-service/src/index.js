@@ -27,9 +27,41 @@ const ORDER_SERVICE_URL =
 const USER_SERVICE_URL =
   process.env.USER_SERVICE_URL || 'http://user-service:8003';
 
-// Track processed events to avoid duplicates
+// DynamoDB for distributed deduplication
+const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+const ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION || 'ap-south-1' });
+const EVENTS_TABLE = process.env.EVENTS_TABLE || 'cloudmart-processed-events-prod';
+
+// Track processed events (local fallback)
 const processedEvents = new Set();
 const notificationLog = [];
+
+async function isEventProcessed(eventKey) {
+  if (process.env.QUEUE_BACKEND === 'sqs' || process.env.EVENTS_TABLE) {
+    try {
+      await ddbClient.send(new PutItemCommand({
+        TableName: EVENTS_TABLE,
+        Item: {
+          id: { S: eventKey },
+          processedAt: { S: new Date().toISOString() }
+        },
+        ConditionExpression: "attribute_not_exists(id)"
+      }));
+      return false; // First time seeing this event
+    } catch (err) {
+      if (err.name === 'ConditionalCheckFailedException') {
+        return true; // Already processed
+      }
+      console.error('[DynamoDB] Error tracking event deduplication:', err);
+      // If DB fails, process it anyway to not drop the message, though it may duplicate.
+      return false; 
+    }
+  } else {
+    if (processedEvents.has(eventKey)) return true;
+    processedEvents.add(eventKey);
+    return false;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Email sending abstraction
@@ -85,8 +117,7 @@ function formatCurrency(amount) {
 async function processOrderEvent(event) {
   // Skip already-processed events
   const eventKey = `${event.type}-${event.orderId}-${event.timestamp}`;
-  if (processedEvents.has(eventKey)) return;
-  processedEvents.add(eventKey);
+  if (await isEventProcessed(eventKey)) return;
 
   if (event.type === 'ORDER_CREATED') {
     const itemList = event.items

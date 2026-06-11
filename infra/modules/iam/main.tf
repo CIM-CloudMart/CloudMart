@@ -191,6 +191,19 @@ data "aws_iam_policy_document" "notification_service_policy" {
   statement {
     effect = "Allow"
     actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+      "dynamodb:DeleteItem",
+      "dynamodb:Query",
+      "dynamodb:Scan"
+    ]
+    resources = [var.dynamodb_events_table_arn]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
       "ses:SendEmail",
       "ses:SendRawEmail"
     ]
@@ -389,5 +402,66 @@ resource "aws_iam_role_policy" "github_actions" {
   name   = "${var.project}-github-actions-policy-${var.environment}"
   role   = aws_iam_role.github_actions.id
   policy = data.aws_iam_policy_document.github_actions_policy.json
+}
+
+# ==================== Cluster Autoscaler IAM Role ====================
+
+data "aws_iam_policy_document" "cluster_autoscaler_assume_role" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    effect  = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = ["arn:${local.partition}:iam::${local.account_id}:oidc-provider/${local.oidc_provider}"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider}:sub"
+      values   = ["system:serviceaccount:kube-system:cluster-autoscaler"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "cluster_autoscaler" {
+  name               = "${var.project}-cluster-autoscaler-role-${var.environment}"
+  assume_role_policy = data.aws_iam_policy_document.cluster_autoscaler_assume_role.json
+}
+
+data "aws_iam_policy_document" "cluster_autoscaler_policy" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DescribeAutoScalingInstances",
+      "autoscaling:DescribeLaunchConfigurations",
+      "autoscaling:DescribeTags",
+      "ec2:DescribeLaunchTemplateVersions"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "autoscaling:SetDesiredCapacity",
+      "autoscaling:TerminateInstanceInAutoScalingGroup",
+      "autoscaling:UpdateAutoScalingGroup"
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "cluster_autoscaler" {
+  name   = "${var.project}-cluster-autoscaler-policy-${var.environment}"
+  role   = aws_iam_role.cluster_autoscaler.id
+  policy = data.aws_iam_policy_document.cluster_autoscaler_policy.json
 }
 
