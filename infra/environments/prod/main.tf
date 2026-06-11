@@ -17,4 +17,9 @@ module "core" {
   limit_amount       = var.limit_amount
   subscriber_emails  = var.subscriber_emails
   enable_guardduty   = var.enable_guardduty
+  rds_instance_class        = var.rds_instance_class
+  rds_multi_az              = var.rds_multi_az
+  rds_max_allocated_storage = var.rds_max_allocated_storage
+  backup_retention_period   = var.backup_retention_period
+  alb_dns_name              = var.alb_dns_name
 }
