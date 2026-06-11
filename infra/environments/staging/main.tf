@@ -109,6 +109,7 @@ module "iam_staging" {
   oidc_url               = module.eks.oidc_provider_url
   kubernetes_namespace   = "cloudmart-staging"
   dynamodb_table_arn     = module.dynamodb_staging.dynamodb_table_arn
+  dynamodb_events_table_arn = module.dynamodb_staging.dynamodb_events_table_arn
   sqs_queue_arn          = module.sqs_staging.queue_arn
   storage_bucket_arn     = module.s3_staging.bucket_arn
   ses_email_identity_arn = module.ses.ses_email_identity_arn
@@ -126,4 +127,22 @@ module "monitoring_staging" {
   sqs_queue_name    = module.sqs_staging.queue_name
   subscriber_emails = var.subscriber_emails
   providers         = { aws = aws.staging }
+}
+
+module "waf" {
+  source      = "../../modules/waf"
+  project     = var.project
+  environment = "staging"
+  enable_waf  = var.enable_waf
+  providers   = { aws = aws.staging }
+}
+
+module "security" {
+  source              = "../../modules/security"
+  project             = var.project
+  environment         = "staging"
+  vpc_id              = module.vpc.vpc_id
+  enable_guardduty    = var.enable_guardduty
+  enable_security_hub = false
+  providers           = { aws = aws.staging }
 }

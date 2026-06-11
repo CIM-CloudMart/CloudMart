@@ -6,3 +6,5 @@ Dockerfile*
 docker-compose*
 .github
 README.md
+test
+tests
