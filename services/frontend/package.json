@@ -12,12 +12,7 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "test": "react-scripts test",
-    "lint": "eslint src"
-  },
-  "devDependencies": {
-    "eslint": "^8.57.0",
-    "eslint-plugin-react": "^7.34.1"
+    "test": "react-scripts test"
   },
   "browserslist": {
     "production": [">0.2%", "not dead", "not op_mini all"],

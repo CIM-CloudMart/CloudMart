@@ -6,7 +6,5 @@ Dockerfile*
 docker-compose*
 .github
 tests
-test/
-__pycache__
 coverage
 README.md

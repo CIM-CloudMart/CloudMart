@@ -39,35 +39,3 @@ docs/COMMANDS.md
 
 __pycache__
 **/*.tfplan
-
-# Node.js dependencies
-**/node_modules/
-**/coverage/
-
-# Python dependencies & environments
-**/__pycache__/
-**/*.pyc
-**/venv/
-**/.venv/
-
-# OS metadata
-**/.DS_Store
-# Additional generated files and directories
-# Build artifacts
-**/dist/
-**/build/
-**/.next/
-**/.cache/
-# Python virtual environments (already covered but ensure patterns)
-**/env/
-**/.env/
-# Test coverage reports
-**/coverage/
-# Docker files
-**/Dockerfile
-**/docker-compose.yml
-# Misc temporary files
-**/*.tmp
-**/*.log.*
-**/tmp/
-**/temp/
