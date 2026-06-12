@@ -191,7 +191,7 @@ class DynamoDBStore:
         else:
             self.dynamodb = boto3.resource('dynamodb')
         self.table = self.dynamodb.Table(table_name)
-
+        
         # Seed logic
         try:
             if not self.get_all():
@@ -214,7 +214,6 @@ class DynamoDBStore:
     def _parse_item(self, item):
         """Convert DynamoDB item to plain dict (handles Decimal)."""
         import decimal
-
         def convert(value):
             if isinstance(value, decimal.Decimal):
                 return float(value) if value % 1 else int(value)
@@ -295,7 +294,7 @@ class DynamoDBStore:
                 ExpressionAttributeValues={':qty': quantity},
             )
             return True
-        except ClientError:
+        except ClientError as e:
             # ConditionalCheckFailedException means insufficient stock
             return False
 
