@@ -8,4 +8,6 @@ Dockerfile*
 docker-compose*
 .github
 tests
+test/
+node_modules
 README.md
