@@ -173,19 +173,6 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
     steps:
-      - name: Set Environment Variables
-        id: env
-        run: |
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "ENV_SHORT=prod" >> $GITHUB_ENV
-            echo "NAMESPACE=cloudmart-prod" >> $GITHUB_ENV
-            echo "RELEASE_NAME=cloudmart" >> $GITHUB_ENV
-          else
-            echo "ENV_SHORT=staging" >> $GITHUB_ENV
-            echo "NAMESPACE=cloudmart-staging" >> $GITHUB_ENV
-            echo "RELEASE_NAME=cloudmart-staging" >> $GITHUB_ENV
-          fi
-
       - name: Checkout Helm Charts
         uses: actions/checkout@v4
         with:
@@ -206,6 +193,12 @@ jobs:
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            ENV_SHORT="prod"
+          else
+            ENV_SHORT="staging"
+          fi
+
           cd helm-charts
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -214,11 +207,11 @@ jobs:
 
           SERVICES="user product order notification frontend"
           for SERVICE in $SERVICES; do
-            yq -i ".${SERVICE}.image.tag = \"${IMAGE_TAG}\"" charts/cloudmart/values-${{ env.ENV_SHORT }}.yaml
-            git add charts/cloudmart/values-${{ env.ENV_SHORT }}.yaml
+            yq -i ".${SERVICE}.image.tag = \"${IMAGE_TAG}\"" charts/cloudmart/values-${ENV_SHORT}.yaml
+            git add charts/cloudmart/values-${ENV_SHORT}.yaml
           done
 
-          if git commit -m "chore(gitops): deploy to ${{ env.ENV_SHORT }} with tag ${IMAGE_TAG}"; then
+          if git commit -m "chore(gitops): deploy to ${ENV_SHORT} with tag ${IMAGE_TAG}"; then
             git push
           else
             echo "No values changes."
@@ -234,21 +227,41 @@ jobs:
 
       - name: Helm Upgrade
         run: |
-          helm upgrade --install "${{ env.RELEASE_NAME }}" ./helm-charts/charts/cloudmart \
-            --namespace "${{ env.NAMESPACE }}" \
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            ENV_SHORT="prod"
+            NAMESPACE="cloudmart-prod"
+            RELEASE_NAME="cloudmart"
+          else
+            ENV_SHORT="staging"
+            NAMESPACE="cloudmart-staging"
+            RELEASE_NAME="cloudmart-staging"
+          fi
+
+          helm upgrade --install "$RELEASE_NAME" ./helm-charts/charts/cloudmart \
+            --namespace "$NAMESPACE" \
             -f ./helm-charts/charts/cloudmart/values.yaml \
-            -f ./helm-charts/charts/cloudmart/values-${{ env.ENV_SHORT }}.yaml
+            -f ./helm-charts/charts/cloudmart/values-${ENV_SHORT}.yaml
 
       - name: Wait for Rollouts (Health-Check Gate)
         run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            NAMESPACE="cloudmart-prod"
+          else
+            NAMESPACE="cloudmart-staging"
+          fi
+
           SERVICES="user-service product-service order-service notification-service frontend"
           for SERVICE in $SERVICES; do
-            kubectl rollout status "deployment/${SERVICE}" -n "${{ env.NAMESPACE }}" --timeout=300s
+            kubectl rollout status "deployment/${SERVICE}" -n "${NAMESPACE}" --timeout=300s
           done
 
       - name: Post-Deployment Smoke Test
         run: |
-          NAMESPACE="${{ env.NAMESPACE }}"
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            NAMESPACE="cloudmart-prod"
+          else
+            NAMESPACE="cloudmart-staging"
+          fi
           echo "Starting post-deployment smoke tests in namespace ${NAMESPACE}..."
           
           services=(
@@ -270,8 +283,8 @@ jobs:
               curl -s -f -o /dev/null -w "%{http_code}" "http://${name}:${port}/health" | grep -q "200"
             
             if [ $? -ne 0 ]; then
-              echo "❌ Service ${name} is unhealthy or unreachable!"
+              echo "Service ${name} is unhealthy or unreachable!"
               exit 1
             fi
-            echo "✅ Service ${name} is healthy."
+            echo "Service ${name} is healthy."
           done
