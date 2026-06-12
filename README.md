@@ -198,7 +198,7 @@ cloudmart-starter/
 
 ## Cloud Provider
 
-**Chosen provider:** _[Your group fills this in: AWS / GCP / Azure]_
+**Chosen provider:** AWS
 
 ## Team Members
 
