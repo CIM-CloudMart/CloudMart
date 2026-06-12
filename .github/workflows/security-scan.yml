@@ -18,7 +18,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Trivy filesystem scanner
+      - name: Run Trivy filesystem scanner (Table format)
+        id: trivy-fs-scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          output: 'trivy-summary.txt'
+          severity: 'CRITICAL'
+          exit-code: '1'
+
+      - name: Publish Trivy Summary to Job Summary
+        if: always()
+        run: |
+          if [ -f trivy-summary.txt ]; then
+            echo "### 🔍 Trivy Filesystem Scan Results (CRITICAL)" >> $GITHUB_STEP_SUMMARY
+            echo "<details><summary>Click to expand Trivy Report</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat trivy-summary.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Run Trivy filesystem scanner (SARIF format)
+        if: always()
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'

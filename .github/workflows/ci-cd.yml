@@ -4,13 +4,11 @@ on:
   push:
     branches:
       - main
-      - develop
-      - 'feature/*'
+      - staging
   pull_request:
     branches:
       - main
-      - develop
-      - 'feature/*'
+      - staging
 
 permissions:
   contents: write
@@ -90,7 +88,7 @@ jobs:
   build-scan-push:
     name: Build, Scan & Push - ${{ matrix.service }}
     needs: [lint-test, manifest-validation]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
     runs-on: ubuntu-latest
     strategy:
       matrix:
