@@ -60,7 +60,7 @@ jobs:
         with:
           repository: CIM-CloudMart/helm-charts
           path: helm-charts
-          ref: ${{ github.ref_name }}
+          ref: main
           token: ${{ secrets.HELM_CHARTS_PAT || secrets.GITHUB_TOKEN }}
       
       - name: Install Kubeconform
@@ -169,7 +169,7 @@ jobs:
         with:
           repository: CIM-CloudMart/helm-charts
           path: helm-charts
-          ref: ${{ github.ref_name }}
+          ref: main
           token: ${{ secrets.HELM_CHARTS_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Configure AWS Credentials
