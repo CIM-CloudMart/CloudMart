@@ -215,9 +215,7 @@ jobs:
           helm upgrade --install "${{ env.RELEASE_NAME }}" ./helm-charts/charts/cloudmart \
             --namespace "${{ env.NAMESPACE }}" \
             -f ./helm-charts/charts/cloudmart/values.yaml \
-            -f ./helm-charts/charts/cloudmart/values-${{ env.ENV_SHORT }}.yaml \
-            --atomic \
-            --timeout 10m
+            -f ./helm-charts/charts/cloudmart/values-${{ env.ENV_SHORT }}.yaml
 
       - name: Wait for Rollouts (Health-Check Gate)
         run: |
