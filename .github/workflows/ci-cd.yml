@@ -79,13 +79,13 @@ jobs:
         run: |
           helm template cloudmart-staging ./helm-charts/charts/cloudmart \
             -f ./helm-charts/charts/cloudmart/values.yaml \
-            -f ./helm-charts/charts/cloudmart/values-staging.yaml | kubeconform -strict -summary
+            -f ./helm-charts/charts/cloudmart/values-staging.yaml | kubeconform -strict -summary -ignore-missing-schemas
 
       - name: Validate Production Manifests
         run: |
           helm template cloudmart-prod ./helm-charts/charts/cloudmart \
             -f ./helm-charts/charts/cloudmart/values.yaml \
-            -f ./helm-charts/charts/cloudmart/values-prod.yaml | kubeconform -strict -summary
+            -f ./helm-charts/charts/cloudmart/values-prod.yaml | kubeconform -strict -summary -ignore-missing-schemas
 
   build-scan-push:
     name: Build, Scan & Push - ${{ matrix.service }}

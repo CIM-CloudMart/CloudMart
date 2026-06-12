@@ -39,3 +39,16 @@ docs/COMMANDS.md
 
 __pycache__
 **/*.tfplan
+
+# Node.js dependencies
+**/node_modules/
+**/coverage/
+
+# Python dependencies & environments
+**/__pycache__/
+**/*.pyc
+**/venv/
+**/.venv/
+
+# OS metadata
+**/.DS_Store
