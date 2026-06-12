@@ -55,11 +55,11 @@ jobs:
           RAW_ENV="${{ inputs.environment }}"
           if [ "$RAW_ENV" = "prod" ]; then
             ENV_SHORT="prod"
-            NAMESPACE="cloudmart"
+            NAMESPACE="cloudmart-prod"
             DEPLOY_ENV="production"
           else
             ENV_SHORT="staging"
-            NAMESPACE="cloudmart"
+            NAMESPACE="cloudmart-staging"
             DEPLOY_ENV=""
           fi
 
