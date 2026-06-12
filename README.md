@@ -204,11 +204,13 @@ cloudmart-starter/
 
 | Name | Student ID | Responsibilities |
 |------|-----------|-----------------|
-| | | |
-| | | |
-| | | |
-| | | |
-| | | |
+| Bandarigoda D.M. | 215016G | Infrastructure as Code, Networking |
+| Wijesekara D.R. | 215126T | Observability and Monitoring |
+| Imesh B.A.A. | 215054U | Cost Management and Disaster Recovery |
+| Ranasingha R.A.D.S. | 215096A | Kubernetes Management, Documentation |
+| Hasari G.V.J. | 215049J | Application, Microservice and Databases |
+| Paranietharan P. | 214145R | Containerization and CI/CD Pipeline |
+|
 
 ## AI Tool Disclosure
 
