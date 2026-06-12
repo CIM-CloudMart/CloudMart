@@ -82,13 +82,38 @@ module "sqs_staging" {
   providers   = { aws = aws.staging }
 }
 
+data "aws_vpc" "prod" {
+  filter {
+    name   = "tag:Name"
+    values = ["cloudmart-vpc-prod"]
+  }
+}
+
+data "aws_subnets" "prod_private_data" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.prod.id]
+  }
+  filter {
+    name   = "tag:Tier"
+    values = ["private-data"]
+  }
+}
+
+data "aws_security_group" "prod_bastion" {
+  filter {
+    name   = "tag:Name"
+    values = ["cloudmart-bastion-sg-prod"]
+  }
+}
+
 module "rds_staging" {
   source                  = "../../modules/rds"
   project                 = var.project
   environment             = "staging"
-  vpc_id                  = module.vpc.vpc_id
-  private_data_subnet_ids = module.vpc.private_data_subnet_ids
-  eks_cluster_sg_id       = null
+  vpc_id                  = data.aws_vpc.prod.id
+  private_data_subnet_ids = data.aws_subnets.prod_private_data.ids
+  eks_cluster_sg_id       = module.eks.cluster_security_group_id
   kms_key_arn             = module.kms.key_arn
   db_secret_arn           = module.secrets_manager_staging.secret_arn
   db_password             = module.secrets_manager_staging.db_password
@@ -97,7 +122,8 @@ module "rds_staging" {
   multi_az                = var.rds_multi_az
   max_allocated_storage   = var.rds_max_allocated_storage
   backup_retention_period = var.backup_retention_period_staging
-  bastion_sg_id           = module.vpc.bastion_security_group_id
+  bastion_sg_id           = data.aws_security_group.prod_bastion.id
+  db_subnet_group_name_suffix = "-prodvpc"
   providers               = { aws = aws.staging }
 }
 

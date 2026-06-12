@@ -1,7 +1,7 @@
 # ==================== RDS PostgreSQL Module ====================
 
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.project}-db-subnet-group-${var.environment}"
+  name       = "${var.project}-db-subnet-group-${var.environment}${var.db_subnet_group_name_suffix}"
   subnet_ids = var.private_data_subnet_ids
 }
 
