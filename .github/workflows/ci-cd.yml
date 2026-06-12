@@ -139,7 +139,11 @@ jobs:
         run: |
           ECR_REPO="${REGISTRY}/cloudmart-${SERVICE}-${ENV_SHORT}"
           docker tag local-image:latest "${ECR_REPO}:${IMAGE_TAG}"
+          docker tag local-image:latest "${ECR_REPO}:latest"
+          docker tag local-image:latest "${ECR_REPO}:${ENV_SHORT}"
           docker push "${ECR_REPO}:${IMAGE_TAG}"
+          docker push "${ECR_REPO}:latest"
+          docker push "${ECR_REPO}:${ENV_SHORT}"
 
   deploy:
     name: Deploy to ${{ github.ref == 'refs/heads/main' && 'Production' || 'Staging' }}
