@@ -128,9 +128,14 @@ jobs:
         run: |
           ECR_REPO="${REGISTRY}/cloudmart-${SERVICE}-${ENV_SHORT}"
           docker build \
-            -t "${ECR_REPO}:${IMAGE_TAG}" \
+            -t local-image:latest \
             "services/${SERVICE}"
+          docker tag local-image:latest "${ECR_REPO}:${IMAGE_TAG}"
+          docker tag local-image:latest "${ECR_REPO}:latest"
+          docker tag local-image:latest "${ECR_REPO}:${ENV_SHORT}"
           docker push "${ECR_REPO}:${IMAGE_TAG}"
+          docker push "${ECR_REPO}:latest"
+          docker push "${ECR_REPO}:${ENV_SHORT}"
 
 
 
@@ -149,6 +154,7 @@ jobs:
         with:
           repository: CIM-CloudMart/helm-charts
           path:       helm-charts
+          ref:        main
           token:      ${{ secrets.HELM_CHARTS_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Configure AWS Credentials
@@ -222,9 +228,7 @@ jobs:
           helm upgrade --install "$RELEASE_NAME" ./helm-charts/charts/cloudmart \
             --namespace "${NAMESPACE}" \
             -f ./helm-charts/charts/cloudmart/values.yaml \
-            -f ./helm-charts/charts/cloudmart/values-${ENV_SHORT}.yaml \
-            --atomic \
-            --timeout 10m
+            -f ./helm-charts/charts/cloudmart/values-${ENV_SHORT}.yaml
 
       - name: Wait for Rollouts
         run: |

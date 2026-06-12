@@ -21,6 +21,7 @@ variable "private_data_subnet_ids" {
 variable "eks_cluster_sg_id" {
   description = "EKS cluster security group ID (Fargate pods or worker nodes)"
   type        = string
+  default     = null
 }
 
 variable "kms_key_arn" {
@@ -49,7 +50,7 @@ variable "instance_class" {
 variable "multi_az" {
   description = "Specifies if the RDS instance is Multi-AZ"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "max_allocated_storage" {
@@ -65,10 +66,10 @@ variable "engine_version" {
 }
 
 variable "backup_retention_period" {
-  description = "RDS backup retention days (free tier accounts: use 0 or 1)"
+  description = "Backup retention days derived from disaster-recovery rpo_backup_hours (converted to days)"
   type        = number
-  default     = 1
 }
+
 
 
 
@@ -83,3 +84,10 @@ variable "db_password" {
   type        = string
   sensitive   = true
 }
+
+variable "db_subnet_group_name_suffix" {
+  description = "Optional suffix for the DB subnet group name"
+  type        = string
+  default     = ""
+}
+

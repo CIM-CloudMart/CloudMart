@@ -23,6 +23,12 @@ variable "dynamodb_table_arn" {
   type        = string
 }
 
+variable "dynamodb_events_table_arn" {
+  description = "DynamoDB table ARN for processed events"
+  type        = string
+}
+
+
 variable "sqs_queue_arn" {
   description = "SQS queue ARN for order events"
   type        = string

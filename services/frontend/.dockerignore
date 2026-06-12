@@ -6,3 +6,6 @@ Dockerfile*
 docker-compose*
 .github
 README.md
+test
+tests
+__pycache__

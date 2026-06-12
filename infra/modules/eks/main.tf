@@ -47,6 +47,12 @@ module "eks" {
         { namespace = "external-secrets" }
       ]
     }
+    amazon_cloudwatch = {
+      name = "amazon-cloudwatch"
+      selectors = [
+        { namespace = "amazon-cloudwatch" }
+      ]
+    }
   } : {}
 
   eks_managed_node_groups = var.use_fargate ? {} : {
@@ -54,8 +60,8 @@ module "eks" {
       name            = "main"
       use_name_prefix = false
       instance_types  = [var.node_instance_type]
-      min_size        = var.desired_node_count
-      max_size        = var.desired_node_count
+      min_size        = 2
+      max_size        = 5
       desired_size    = var.desired_node_count
       capacity_type   = "ON_DEMAND"
 
@@ -79,10 +85,18 @@ module "eks" {
         computeType = "Fargate"
       })
     }
+    amazon-cloudwatch-observability = {
+      resolve_conflicts_on_create = "OVERWRITE"
+      resolve_conflicts_on_update = "OVERWRITE"
+    }
     } : {
     coredns    = {}
     kube-proxy = {}
     vpc-cni    = {}
+    amazon-cloudwatch-observability = {
+      resolve_conflicts_on_create = "OVERWRITE"
+      resolve_conflicts_on_update = "OVERWRITE"
+    }
   }
 
   access_entries = {

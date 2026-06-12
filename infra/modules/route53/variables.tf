@@ -25,3 +25,9 @@ variable "failover_s3_website_domain" {
   type        = string
   default     = null
 }
+
+variable "hosted_zone_id" {
+  description = "Existing Route53 Hosted Zone ID for failover records"
+  type        = string
+  default     = null
+}
