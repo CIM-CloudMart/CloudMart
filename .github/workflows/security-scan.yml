@@ -41,6 +41,22 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
             echo "</details>" >> $GITHUB_STEP_SUMMARY
           fi
+          - name: Comment Trivy report on PR
+            if: github.event_name == 'pull_request'
+            uses: actions/github-script@v7
+            env:
+              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            with:
+              script: |
+                const fs = require('fs');
+                const report = fs.readFileSync('trivy-summary.txt', 'utf8');
+                const comment = `### 🔍 Trivy Filesystem Scan Results (CRITICAL)\n\`\`\`\n${report}\n\`\`\``;
+                github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: comment
+                });
 
       - name: Run Trivy filesystem scanner (SARIF format)
         if: always()
