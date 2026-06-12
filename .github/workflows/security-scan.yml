@@ -18,48 +18,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Trivy filesystem scanner (Table format)
-        id: trivy-fs-scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'table'
-          output: 'trivy-summary.txt'
-          severity: 'CRITICAL'
-          exit-code: '1'
-
-      - name: Publish Trivy Summary to Job Summary
-        if: always()
-        run: |
-          if [ -f trivy-summary.txt ]; then
-            echo "### 🔍 Trivy Filesystem Scan Results (CRITICAL)" >> $GITHUB_STEP_SUMMARY
-            echo "<details><summary>Click to expand Trivy Report</summary>" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            cat trivy-summary.txt >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "</details>" >> $GITHUB_STEP_SUMMARY
-          fi
-          - name: Comment Trivy report on PR
-            if: github.event_name == 'pull_request'
-            uses: actions/github-script@v7
-            env:
-              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            with:
-              script: |
-                const fs = require('fs');
-                const report = fs.readFileSync('trivy-summary.txt', 'utf8');
-                const comment = `### 🔍 Trivy Filesystem Scan Results (CRITICAL)\n\`\`\`\n${report}\n\`\`\``;
-                github.rest.issues.createComment({
-                  issue_number: context.issue.number,
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  body: comment
-                });
-
-      - name: Run Trivy filesystem scanner (SARIF format)
-        if: always()
+      - name: Run Trivy filesystem scanner
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -90,7 +49,6 @@ jobs:
         with:
           name: sbom-${{ github.sha }}
           path: sbom.json
-
 
   secret-scan:
     name: Secret Scan (TruffleHog)
@@ -175,11 +133,11 @@ jobs:
         run: |
           echo "## Dependency Audit Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "_Commit: `${{ github.sha }}` | Branch: `${{ github.ref_name }}`_" >> $GITHUB_STEP_SUMMARY
+          echo "_Commit: \`${{ github.sha }}\` | Branch: \`${{ github.ref_name }}\`_" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # ── Python services ──
-          echo "### Python Services" >> $GITHUB_STEP_SUMMARY
+          echo "### 🐍 Python Services" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           for SERVICE in product user; do
@@ -187,7 +145,7 @@ jobs:
             LABEL="${SERVICE}-service"
 
             if [ ! -f "$FILE" ]; then
-              echo "#### `$LABEL` — No results file found" >> $GITHUB_STEP_SUMMARY
+              echo "#### \`$LABEL\` — No results file found" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
               continue
             fi
@@ -199,9 +157,9 @@ jobs:
           " 2>/dev/null || echo 0)
 
             if [ "$VULN_COUNT" -eq 0 ]; then
-              echo "#### `$LABEL` — No vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+              echo "#### \`$LABEL\` — No vulnerabilities found" >> $GITHUB_STEP_SUMMARY
             else
-              echo "#### `$LABEL` — $VULN_COUNT vulnerabilit$([ $VULN_COUNT -eq 1 ] && echo y || echo ies) found" >> $GITHUB_STEP_SUMMARY
+              echo "#### \`$LABEL\` — $VULN_COUNT vulnerabilit$([ $VULN_COUNT -eq 1 ] && echo y || echo ies) found" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
               echo "| Package | Version | ID | Fix Version |" >> $GITHUB_STEP_SUMMARY
               echo "|---------|---------|-----|-------------|" >> $GITHUB_STEP_SUMMARY
@@ -214,7 +172,7 @@ jobs:
                   version = dep.get('version', '')
                   vid     = v.get('id', '')
                   fix     = ', '.join(v.get('fix_versions', [])) or '—'
-                  print(f'| `{name}` | {version} | [{vid}](https://osv.dev/vulnerability/{vid}) | {fix} |')
+                  print(f'| \`{name}\` | {version} | [{vid}](https://osv.dev/vulnerability/{vid}) | {fix} |')
           " >> $GITHUB_STEP_SUMMARY
             fi
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -230,7 +188,7 @@ jobs:
             [ "$SERVICE" = "frontend" ] && LABEL="frontend"
 
             if [ ! -f "$FILE" ]; then
-              echo "#### `$LABEL` — No results file found" >> $GITHUB_STEP_SUMMARY
+              echo "#### \`$LABEL\` — No results file found" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
               continue
             fi
@@ -247,9 +205,9 @@ jobs:
           " 2>/dev/null || echo 0)
 
             if [ "$VULN_COUNT" -eq 0 ]; then
-              echo "#### `$LABEL` — No critical vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+              echo "#### \`$LABEL\` — No critical vulnerabilities found" >> $GITHUB_STEP_SUMMARY
             else
-              echo "#### `$LABEL` — $VULN_COUNT critical vulnerabilit$([ $VULN_COUNT -eq 1 ] && echo y || echo ies) found" >> $GITHUB_STEP_SUMMARY
+              echo "#### \`$LABEL\` — $VULN_COUNT critical vulnerabilit$([ $VULN_COUNT -eq 1 ] && echo y || echo ies) found" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
               echo "| Package | Severity | Via | Fix Available |" >> $GITHUB_STEP_SUMMARY
               echo "|---------|----------|-----|---------------|" >> $GITHUB_STEP_SUMMARY
@@ -262,7 +220,7 @@ jobs:
               severity = v.get('severity', '')
               via      = ', '.join(str(x) if isinstance(x, str) else x.get('name','?') for x in v.get('via', []))[:60]
               fix      = 'Yes' if v.get('fixAvailable') else 'No'
-              print(f'| `{name}` | {severity} | {via} | {fix} |')
+              print(f'| \`{name}\` | {severity} | {via} | {fix} |')
           " >> $GITHUB_STEP_SUMMARY
             fi
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -270,8 +228,8 @@ jobs:
 
           # ── Footer ──
           echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "> To fix Python vulns run `pip install --upgrade <package>` and update `requirements.txt`." >> $GITHUB_STEP_SUMMARY
-          echo "> To fix Node vulns run `npm audit fix` in the service directory." >> $GITHUB_STEP_SUMMARY
+          echo "> 💡 To fix Python vulns run \`pip install --upgrade <package>\` and update \`requirements.txt\`." >> $GITHUB_STEP_SUMMARY
+          echo "> 💡 To fix Node vulns run \`npm audit fix\` in the service directory." >> $GITHUB_STEP_SUMMARY
 
   scan-summary:
     name: Scan Summary
@@ -281,20 +239,20 @@ jobs:
     steps:
       - name: Write job summary
         run: |
-          echo "## Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 🛡️ Security Scan Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
 
+          TRIVY="${{ needs.trivy-scan.result }}"
           SECRETS="${{ needs.secret-scan.result }}"
           DEPS="${{ needs.dependency-audit.result }}"
-          TRIVY="${{ needs.trivy-scan.result }}"
 
           icon() { [ "$1" = "success" ] && echo "Passed" || echo "Failed"; }
 
-          echo "| Trivy Scan     | $(icon $TRIVY) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trivy FS Scan   | $(icon $TRIVY) |"   >> $GITHUB_STEP_SUMMARY
           echo "| Secret Scan     | $(icon $SECRETS) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Dependency Audit| $(icon $DEPS) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Audit| $(icon $DEPS) |"    >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
       - name: Block on verified secrets
@@ -302,6 +260,5 @@ jobs:
           if [[ "${{ needs.secret-scan.result }}" == "failure" ]]; then
             echo "Secret scan failed — verified secrets found. Blocking commit."
             exit 1
-          else
-            echo "No verified secrets detected."
           fi
+          echo "No verified secrets detected."
