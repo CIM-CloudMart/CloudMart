@@ -1,12 +1,12 @@
 # ---- Stage 1: Install dependencies ----
-FROM node:20-alpine AS builder
+FROM node:20-alpine3.21 AS builder
 
 WORKDIR /build
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm ci --omit=dev
 
 # ---- Stage 2: Runtime ----
-FROM node:20-alpine
+FROM node:20-alpine3.21
 
 # Create non-root user
 RUN addgroup -S appuser && adduser -S appuser -G appuser

@@ -1,9 +1,9 @@
 # ---- Stage 1: Build React app ----
-FROM node:20-alpine AS builder
+FROM node:20-alpine3.21 AS builder
 
 WORKDIR /build
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 COPY public/ ./public/
 COPY src/ ./src/
@@ -11,7 +11,7 @@ COPY src/ ./src/
 RUN npm run build
 
 # ---- Stage 2: Serve with Nginx ----
-FROM nginx:1.27-alpine
+FROM nginx:1.27-alpine3.21
 
 # Remove default nginx config
 RUN rm /etc/nginx/conf.d/default.conf
