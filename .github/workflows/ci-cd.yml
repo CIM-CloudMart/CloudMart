@@ -239,6 +239,7 @@ jobs:
 
           helm upgrade --install "$RELEASE_NAME" ./helm-charts/charts/cloudmart \
             --namespace "$NAMESPACE" \
+            --create-namespace \
             -f ./helm-charts/charts/cloudmart/values.yaml \
             -f ./helm-charts/charts/cloudmart/values-${ENV_SHORT}.yaml
 

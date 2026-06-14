@@ -107,6 +107,29 @@ terraform plan -out=staging.tfplan
 terraform apply staging.tfplan
 ```
 
+### 3. Bootstrap Kubernetes Operators
+Before applying the application Helm chart (or running the CI/CD deployment pipeline), you must install the Kubernetes operators that register the custom resources (`ClusterPolicy`, `ExternalSecret`, `ScaledObject`) used by CloudMart:
+
+```bash
+# Connect kubectl to your new EKS cluster
+aws eks update-kubeconfig --name cloudmart --region ap-south-1
+
+# Install Kyverno (Policy Engine)
+helm repo add kyverno https://kyverno.github.io/kyverno/
+helm repo update
+helm install kyverno kyverno/kyverno -n kyverno --create-namespace --set crds.install=true
+
+# Install External Secrets Operator
+helm repo add external-secrets https://charts.external-secrets.io
+helm repo update
+helm install external-secrets external-secrets/external-secrets -n external-secrets --create-namespace --set installCRDs=true
+
+# Install KEDA (Kubernetes Event-driven Autoscaling)
+helm repo add kedacore https://kedacore.github.io/charts
+helm repo update
+helm install keda kedacore/keda -n keda --create-namespace
+```
+
 ---
 
 ## 🔍 Troubleshooting Guide & Common Failures
