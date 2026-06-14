@@ -333,40 +333,69 @@ jobs:
             fi
           done
           echo "✅ All workloads are healthy."
-      # ── Post-deployment smoke tests ───────────────────────────────────────
+      # ── Post-deployment smoke tests (port-forward → curl on CI runner) ──────
+      # Why port-forward instead of kubectl run:
+      #   EKS Fargate must provision a new node per ephemeral pod (~60s).
+      #   Port-forwarding reuses the already-running pods instantly.
       - name: Post-Deployment Smoke Tests
         run: |
           NAMESPACE="${{ steps.env.outputs.namespace }}"
           echo "Starting smoke tests in ${NAMESPACE}..."
-
           FAILED=0
-          declare -A SERVICE_PORTS=(
-            ["product-service"]="8001"
-            ["order-service"]="8002"
-            ["user-service"]="8003"
-            ["notification-service"]="8004"
-            ["frontend"]="80"
+
+          # service → "local_port:remote_port"
+          declare -A SERVICE_MAP=(
+            ["product-service"]="18001:8001"
+            ["order-service"]="18002:8002"
+            ["user-service"]="18003:8003"
+            ["notification-service"]="18004:8004"
+            ["frontend"]="18080:80"
+          )
+          declare -A HEALTH_PATH=(
+            ["product-service"]="/health"
+            ["order-service"]="/health"
+            ["user-service"]="/health"
+            ["notification-service"]="/health"
+            ["frontend"]="/"
           )
 
-          for SVC in "${!SERVICE_PORTS[@]}"; do
-            PORT="${SERVICE_PORTS[$SVC]}"
-            echo "Smoke testing ${SVC}:${PORT}/health ..."
+          for SVC in "${!SERVICE_MAP[@]}"; do
+            PORTS="${SERVICE_MAP[$SVC]}"
+            LOCAL_PORT="${PORTS%%:*}"
+            REMOTE_PORT="${PORTS##*:}"
+            PATH_="${HEALTH_PATH[$SVC]}"
 
-            STATUS=$(kubectl run "smoke-${SVC//[^a-z0-9]/-}-${{ github.run_number }}" \
-              --image=curlimages/curl:8.7.1 \
-              --rm -i --restart=Never \
-              --namespace="${NAMESPACE}" \
-              --command -- \
-              curl -s -o /dev/null -w "%{http_code}" \
-                "http://${SVC}:${PORT}/health" \
-              2>/dev/null || echo "000")
+            echo "Smoke testing ${SVC} (port-forward :${LOCAL_PORT} → svc:${REMOTE_PORT})${PATH_} ..."
+
+            # Start port-forward in background; redirect stderr so it doesnt pollute STATUS
+            kubectl port-forward "svc/${SVC}" "${LOCAL_PORT}:${REMOTE_PORT}" \
+              -n "${NAMESPACE}" > /dev/null 2>&1 &
+            PF_PID=$!
+
+            # Give the tunnel a moment to establish
+            sleep 4
+
+            # Retry up to 3 times (handles brief startup latency)
+            STATUS="000"
+            for ATTEMPT in 1 2 3; do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                --max-time 10 \
+                "http://localhost:${LOCAL_PORT}${PATH_}" 2>/dev/null || echo "000")
+              [ "${STATUS}" = "200" ] && break
+              echo "  attempt ${ATTEMPT}: got ${STATUS}, retrying..."
+              sleep 3
+            done
+
+            # Tear down port-forward
+            kill "${PF_PID}" 2>/dev/null || true
+            wait "${PF_PID}" 2>/dev/null || true
 
             echo "  Response: ${STATUS}"
-            if [ "${STATUS}" != "200" ]; then
+            if [ "${STATUS}" = "200" ]; then
+              echo "  ✅ ${SVC} is healthy"
+            else
               echo "  ❌ ${SVC} returned ${STATUS} — smoke test FAILED"
               FAILED=1
-            else
-              echo "  ✅ ${SVC} is healthy"
             fi
           done
 
