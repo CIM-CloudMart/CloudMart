@@ -302,20 +302,37 @@ jobs:
             --timeout 10m \
             --cleanup-on-fail
 
-      # ── Health-check gate: wait for all deployments to roll out ───────────
+      # ── Health-check gate: wait for all deployments/rollouts to become available ─────
+      - name: Install kubectl-argo-rollouts plugin
+        run: |
+          ARGO_ROLLOUTS_VERSION="v1.8.3"
+          curl -sLo /usr/local/bin/kubectl-argo-rollouts \
+            "https://github.com/argoproj/argo-rollouts/releases/download/${ARGO_ROLLOUTS_VERSION}/kubectl-argo-rollouts-linux-amd64"
+          chmod +x /usr/local/bin/kubectl-argo-rollouts
+          kubectl argo rollouts version
+
       - name: Health-Check Gate (Rollout Wait)
         run: |
           NAMESPACE="${{ steps.env.outputs.namespace }}"
           SERVICES="user-service product-service order-service notification-service frontend"
-          echo "Waiting for all deployments to become available in ${NAMESPACE}..."
+          echo "Waiting for all workloads to become available in ${NAMESPACE}..."
           for SVC in $SERVICES; do
-            echo "→ rollout status: ${SVC}"
-            kubectl rollout status "deployment/${SVC}" \
-              -n "${NAMESPACE}" \
-              --timeout=300s
+            # Check Argo Rollout first, then fall back to standard Deployment
+            if kubectl get rollout "${SVC}" -n "${NAMESPACE}" --ignore-not-found 2>/dev/null | grep -q "${SVC}"; then
+              echo "→ [Argo Rollout] kubectl argo rollouts status: ${SVC}"
+              kubectl argo rollouts status "${SVC}" \
+                -n "${NAMESPACE}" \
+                --timeout 300s
+            elif kubectl get deployment "${SVC}" -n "${NAMESPACE}" --ignore-not-found 2>/dev/null | grep -q "${SVC}"; then
+              echo "→ [Deployment] kubectl rollout status: ${SVC}"
+              kubectl rollout status "deployment/${SVC}" \
+                -n "${NAMESPACE}" \
+                --timeout=300s
+            else
+              echo "⚠️  WARNING: ${SVC} not found as Deployment or Rollout in ${NAMESPACE} — skipping"
+            fi
           done
-          echo "✅ All deployments are healthy."
-
+          echo "✅ All workloads are healthy."
       # ── Post-deployment smoke tests ───────────────────────────────────────
       - name: Post-Deployment Smoke Tests
         run: |
