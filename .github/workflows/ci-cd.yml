@@ -143,7 +143,7 @@ jobs:
       # ── Trivy: CRITICAL findings = pipeline failure ───────────────────────
       - name: Run Trivy Vulnerability Scan
         id: trivy-scan
-        uses: aquasecurity/trivy-action@0.31.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: local-image:latest
           format: table
