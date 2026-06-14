@@ -2,11 +2,16 @@
 FROM node:20-alpine3.21 AS builder
 
 WORKDIR /build
+# Patch OS-level CVEs before installing dependencies
+RUN apk upgrade --no-cache
 COPY package*.json ./
 RUN npm ci --omit=dev
 
 # ---- Stage 2: Runtime ----
 FROM node:20-alpine3.21
+
+# Patch OS-level CVEs
+RUN apk upgrade --no-cache
 
 # Create non-root user
 RUN addgroup -S appuser && adduser -S appuser -G appuser

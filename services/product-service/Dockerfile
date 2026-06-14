@@ -4,14 +4,18 @@ FROM python:3.12-alpine3.21 AS builder
 
 WORKDIR /build
 
-# Install build-time system deps only in this stage
-RUN apk add --no-cache gcc musl-dev libffi-dev
+# Upgrade OS packages first to patch Alpine-level CVEs, then add build deps
+RUN apk upgrade --no-cache && \
+    apk add --no-cache gcc musl-dev libffi-dev
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # ---- Stage 2: Runtime ----
 FROM python:3.12-alpine3.21
+
+# Upgrade OS packages to patch Alpine-level CVEs
+RUN apk upgrade --no-cache
 
 # Create non-root user
 RUN addgroup -S appuser && adduser -S appuser -G appuser
