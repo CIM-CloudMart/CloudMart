@@ -11,7 +11,7 @@ variable "environment" {
 variable "team" {
   description = "Team name for tagging"
   type        = string
-  default     = "team-axel"
+  default     = "team_axel"
 }
 
 variable "kms_key_id" {
