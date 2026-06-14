@@ -119,10 +119,16 @@ helm repo add kyverno https://kyverno.github.io/kyverno/
 helm repo update
 helm install kyverno kyverno/kyverno -n kyverno --create-namespace --set crds.install=true
 
-# Install External Secrets Operator
+# Install External Secrets Operator (with EKS Fargate overrides)
 helm repo add external-secrets https://charts.external-secrets.io
 helm repo update
-helm install external-secrets external-secrets/external-secrets -n external-secrets --create-namespace --set installCRDs=true
+helm install external-secrets external-secrets/external-secrets \
+  -n external-secrets \
+  --create-namespace \
+  --set installCRDs=true \
+  --set webhook.port=10252 \
+  --set 'certController.dnsNames[0]=external-secrets-webhook.external-secrets.svc' \
+  --set 'certController.dnsNames[1]=external-secrets-webhook.external-secrets.svc.cluster.local'
 
 # Install KEDA (Kubernetes Event-driven Autoscaling)
 helm repo add kedacore https://kedacore.github.io/charts
