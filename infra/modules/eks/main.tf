@@ -66,6 +66,18 @@ module "eks" {
         { namespace = "amazon-cloudwatch" }
       ]
     }
+    kyverno = {
+      name = "kyverno"
+      selectors = [
+        { namespace = "kyverno" }
+      ]
+    }
+    keda = {
+      name = "keda"
+      selectors = [
+        { namespace = "keda" }
+      ]
+    }
   } : {}
 
   eks_managed_node_groups = var.use_fargate ? {} : {
