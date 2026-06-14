@@ -329,6 +329,7 @@ store = create_store()
 
 
 @app.route("/trigger-error")
+@app.route("/api/trigger-error")
 def trigger_error():
     logger.error("Deliberately triggering internal server error for rollback test")
     abort(500, description="Deliberately triggered internal server error")
@@ -351,6 +352,7 @@ def ready():
 
 
 @app.route("/products", methods=["GET"])
+@app.route("/api/products", methods=["GET"])
 def list_products():
     """
     List all products.
@@ -363,6 +365,7 @@ def list_products():
 
 
 @app.route("/products/<product_id>", methods=["GET"])
+@app.route("/api/products/<product_id>", methods=["GET"])
 def get_product(product_id):
     """Get a single product by ID."""
     product = store.get_by_id(product_id)
@@ -372,6 +375,7 @@ def get_product(product_id):
 
 
 @app.route("/products", methods=["POST"])
+@app.route("/api/products", methods=["POST"])
 def create_product():
     """Create a new product."""
     data = request.get_json()
@@ -383,6 +387,7 @@ def create_product():
 
 
 @app.route("/products/<product_id>", methods=["PUT"])
+@app.route("/api/products/<product_id>", methods=["PUT"])
 def update_product(product_id):
     """Update an existing product."""
     data = request.get_json()
@@ -396,6 +401,7 @@ def update_product(product_id):
 
 
 @app.route("/products/<product_id>", methods=["DELETE"])
+@app.route("/api/products/<product_id>", methods=["DELETE"])
 def delete_product(product_id):
     """Delete a product."""
     if not store.delete(product_id):
@@ -427,6 +433,7 @@ def decrement_stock(product_id):
 
 
 @app.route("/categories", methods=["GET"])
+@app.route("/api/categories", methods=["GET"])
 def list_categories():
     """List all unique product categories."""
     products = store.get_all()
