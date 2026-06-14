@@ -150,6 +150,14 @@ terraform apply staging.tfplan
 | `limit_amount` | `1000` | AWS Budget monthly limit (USD) |
 | `subscriber_emails` | `[]` | Email list for budget/monitoring alerts |
 | `from_email` | `no-reply@cloudmart.com` | SES sender email address |
+| `admin_principal_arn` | `null` | Optional IAM principal ARN to register as EKS Admin (defaults to current caller) |
+| `cicd_role_arn` | `null` | Optional IAM role ARN for external CI/CD access to EKS |
+
+---
+
+## 🆕 Fresh AWS Account Deployment
+
+For instructions on provisioning CloudMart to a completely fresh or empty AWS account, including bootstrap setup, decoupled EKS access entries, and S3 global naming unique suffixes, refer to the [Fresh Account Deployment Guide](file:///Users/paranietharan/Documents/codes/cloudmart-dev/CloudMart/docs/terraform.md).
 
 ---
 

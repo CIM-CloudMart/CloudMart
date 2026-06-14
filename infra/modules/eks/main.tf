@@ -1,4 +1,17 @@
 # EKS Cluster — Fargate-first for free tier / low vCPU quota
+data "aws_caller_identity" "current" {}
+
+locals {
+  caller_arn = data.aws_caller_identity.current.arn
+  # STS assumed roles return arn:aws:sts::... which is invalid for access entries.
+  # Convert to the corresponding IAM role ARN if necessary.
+  resolved_admin_arn = length(regexall("^arn:aws:sts::", local.caller_arn)) > 0 ? replace(
+    local.caller_arn,
+    "/^arn:aws:sts::(\\d+):assumed-role/(.+)/[^/]+$/",
+    "arn:aws:iam::$1:role/$2"
+  ) : local.caller_arn
+}
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 21.0"
@@ -102,7 +115,7 @@ module "eks" {
   access_entries = {
     admin = {
       kubernetes_groups = []
-      principal_arn     = "arn:aws:iam::779417963796:user/Dinuka"
+      principal_arn     = var.admin_principal_arn != null && var.admin_principal_arn != "" ? var.admin_principal_arn : local.resolved_admin_arn
       policy_associations = {
         admin = {
           policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"

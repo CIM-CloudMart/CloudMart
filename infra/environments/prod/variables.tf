@@ -124,3 +124,15 @@ variable "alb_dns_name" {
   default     = null
 }
 
+variable "admin_principal_arn" {
+  description = "The ARN of the admin principal to register in EKS access entries"
+  type        = string
+  default     = null
+}
+
+variable "cicd_role_arn" {
+  description = "The ARN of an existing CI/CD IAM role to grant EKS access"
+  type        = string
+  default     = null
+}
+
