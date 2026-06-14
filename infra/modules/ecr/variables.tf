@@ -23,7 +23,7 @@ variable "repository_names" {
 variable "team" {
   description = "Team name for tagging"
   type        = string
-  default     = "team_axel"
+  default     = "team-axel-8"
 }
 
 variable "owner_email" {

@@ -13,7 +13,7 @@ variable "environment" {
 variable "team" {
   description = "Team name (used for globally unique S3 bucket naming)"
   type        = string
-  default     = "team_axel"
+  default     = "team-axel-8"
 }
 
 variable "region" {

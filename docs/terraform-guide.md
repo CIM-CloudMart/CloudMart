@@ -56,7 +56,7 @@ terraform apply -auto-approve
 ```
 
 > [!IMPORTANT]
-> Run this step **only once** per team/account. The bucket name is derived from the `project` and `team` variables (defaults: `cloudmart` and `team_axel`).
+> Run this step **only once** per team/account. The bucket name is derived from the `project` and `team` variables (defaults: `cloudmart` and `team-axel-8`).
 
 ---
 
@@ -77,7 +77,7 @@ The `infra/environments/prod/` directory targets the production AWS account. It 
 | `security` | Security Hub & GuardDuty (optional) |
 | `disaster_recovery` | Cross-region backup & recovery setup |
 
-**Remote state backend:** `s3://cloudmart-tfstate-team_axel` → key `environments/prod/terraform.tfstate`
+**Remote state backend:** `s3://cloudmart-tfstate-team-axel-8` → key `environments/prod/terraform.tfstate`
 
 ```bash
 # Navigate to the production environment directory
@@ -136,7 +136,7 @@ terraform apply staging.tfplan
 |---|---|---|
 | `project` | `cloudmart` | Project name prefix for all resources |
 | `environment` | `prod` | Deployment environment tag |
-| `team` | `team_axel` | Team name (used for unique S3 bucket naming) |
+| `team` | `team-axel-8` | Team name (used for unique S3 bucket naming) |
 | `region` | `ap-south-1` | AWS region |
 | `vpc_cidr` | `10.0.0.0/16` | VPC CIDR block |
 | `single_nat_gateway` | `false` | Use a single NAT gateway (cost saving for non-prod) |
