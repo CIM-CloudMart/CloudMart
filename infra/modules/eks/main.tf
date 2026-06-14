@@ -78,6 +78,18 @@ module "eks" {
         { namespace = "keda" }
       ]
     }
+    argo_rollouts = {
+      name = "argo-rollouts"
+      selectors = [
+        { namespace = "argo-rollouts" }
+      ]
+    }
+    monitoring = {
+      name = "monitoring"
+      selectors = [
+        { namespace = "monitoring" }
+      ]
+    }
   } : {}
 
   eks_managed_node_groups = var.use_fargate ? {} : {

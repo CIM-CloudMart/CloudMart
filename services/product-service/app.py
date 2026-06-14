@@ -21,12 +21,15 @@ from dotenv import load_dotenv
 # AWS X-Ray Tracing Setup
 from aws_xray_sdk.core import xray_recorder, patch_all
 from aws_xray_sdk.ext.flask.middleware import XRayMiddleware
+from prometheus_flask_exporter import PrometheusMetrics
 patch_all()
 
 # ---------------------------------------------------------------------------
 # App setup
 # ---------------------------------------------------------------------------
 app = Flask(__name__)
+metrics = PrometheusMetrics(app)
+metrics.info('app_info', 'Product Service Info', version='1.0.0')
 app.config["JSON_SORT_KEYS"] = False
 XRayMiddleware(app, xray_recorder)
 
@@ -323,6 +326,12 @@ store = create_store()
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
+
+@app.route("/trigger-error")
+def trigger_error():
+    logger.error("Deliberately triggering internal server error for rollback test")
+    abort(500, description="Deliberately triggered internal server error")
 
 
 @app.route("/health")
