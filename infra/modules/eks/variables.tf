@@ -71,3 +71,9 @@ variable "cluster_endpoint_private_access" {
   type        = bool
   default     = true
 }
+
+variable "admin_principal_arn" {
+  description = "The ARN of the admin principal to register in EKS access entries"
+  type        = string
+  default     = null
+}

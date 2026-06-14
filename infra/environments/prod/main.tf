@@ -22,4 +22,6 @@ module "core" {
   rds_max_allocated_storage = var.rds_max_allocated_storage
   backup_retention_period   = var.backup_retention_period
   alb_dns_name              = var.alb_dns_name
+  admin_principal_arn       = var.admin_principal_arn
+  cicd_role_arn             = var.cicd_role_arn
 }

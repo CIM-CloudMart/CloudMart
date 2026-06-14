@@ -172,3 +172,23 @@ module "security" {
   enable_security_hub = false
   providers           = { aws = aws.staging }
 }
+
+resource "aws_eks_access_entry" "github_actions_staging" {
+  provider          = aws.staging
+  cluster_name      = module.eks.cluster_name
+  principal_arn     = module.iam_staging.github_actions_role_arn
+  kubernetes_groups = []
+  depends_on        = [module.iam_staging]
+}
+
+resource "aws_eks_access_policy_association" "github_actions_staging" {
+  provider      = aws.staging
+  cluster_name  = module.eks.cluster_name
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  principal_arn = module.iam_staging.github_actions_role_arn
+
+  access_scope {
+    type = "cluster"
+  }
+  depends_on    = [module.iam_staging]
+}

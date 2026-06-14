@@ -37,6 +37,7 @@ module "eks" {
   desired_node_count      = var.desired_node_count
   team                    = var.team
   kms_key_id              = module.kms.key_arn
+  admin_principal_arn     = var.admin_principal_arn
 }
 
 module "waf" {
@@ -162,11 +163,12 @@ module "monitoring" {
 data "aws_caller_identity" "current" {}
 
 locals {
-  github_actions_roles = {
-    prod    = module.iam.github_actions_role_arn
-    staging = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/cloudmart-github-actions-role-staging"
-    cicd    = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/ci-cd"
-  }
+  github_actions_roles = merge(
+    {
+      prod = module.iam.github_actions_role_arn
+    },
+    var.cicd_role_arn != null && var.cicd_role_arn != "" ? { cicd = var.cicd_role_arn } : {}
+  )
 }
 
 resource "aws_eks_access_entry" "github_actions" {
@@ -174,6 +176,7 @@ resource "aws_eks_access_entry" "github_actions" {
   cluster_name      = module.eks.cluster_name
   principal_arn     = each.value
   kubernetes_groups = []
+  depends_on        = [module.iam]
 }
 
 resource "aws_eks_access_policy_association" "github_actions" {
@@ -185,4 +188,5 @@ resource "aws_eks_access_policy_association" "github_actions" {
   access_scope {
     type = "cluster"
   }
+  depends_on    = [module.iam]
 }

@@ -56,7 +56,7 @@ terraform apply -auto-approve
 ```
 
 > [!IMPORTANT]
-> Run this step **only once** per team/account. The bucket name is derived from the `project` and `team` variables (defaults: `cloudmart` and `team-axel`).
+> Run this step **only once** per team/account. The bucket name is derived from the `project` and `team` variables (defaults: `cloudmart` and `team-axel-8`).
 
 ---
 
@@ -77,7 +77,7 @@ The `infra/environments/prod/` directory targets the production AWS account. It 
 | `security` | Security Hub & GuardDuty (optional) |
 | `disaster_recovery` | Cross-region backup & recovery setup |
 
-**Remote state backend:** `s3://cloudmart-tfstate-team-axel` → key `environments/prod/terraform.tfstate`
+**Remote state backend:** `s3://cloudmart-tfstate-team-axel-8` → key `environments/prod/terraform.tfstate`
 
 ```bash
 # Navigate to the production environment directory
@@ -136,7 +136,7 @@ terraform apply staging.tfplan
 |---|---|---|
 | `project` | `cloudmart` | Project name prefix for all resources |
 | `environment` | `prod` | Deployment environment tag |
-| `team` | `team-axel` | Team name (used for unique S3 bucket naming) |
+| `team` | `team-axel-8` | Team name (used for unique S3 bucket naming) |
 | `region` | `ap-south-1` | AWS region |
 | `vpc_cidr` | `10.0.0.0/16` | VPC CIDR block |
 | `single_nat_gateway` | `false` | Use a single NAT gateway (cost saving for non-prod) |
@@ -150,6 +150,14 @@ terraform apply staging.tfplan
 | `limit_amount` | `1000` | AWS Budget monthly limit (USD) |
 | `subscriber_emails` | `[]` | Email list for budget/monitoring alerts |
 | `from_email` | `no-reply@cloudmart.com` | SES sender email address |
+| `admin_principal_arn` | `null` | Optional IAM principal ARN to register as EKS Admin (defaults to current caller) |
+| `cicd_role_arn` | `null` | Optional IAM role ARN for external CI/CD access to EKS |
+
+---
+
+## 🆕 Fresh AWS Account Deployment
+
+For instructions on provisioning CloudMart to a completely fresh or empty AWS account, including bootstrap setup, decoupled EKS access entries, and S3 global naming unique suffixes, refer to the [Fresh Account Deployment Guide](file:///Users/paranietharan/Documents/codes/cloudmart-dev/CloudMart/docs/terraform.md).
 
 ---
 

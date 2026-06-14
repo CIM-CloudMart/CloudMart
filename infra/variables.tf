@@ -13,7 +13,7 @@ variable "environment" {
 variable "team" {
   description = "Team name (used for globally unique S3 bucket naming)"
   type        = string
-  default     = "team-axel"
+  default     = "team-axel-8"
 }
 
 variable "region" {
@@ -120,6 +120,18 @@ variable "backup_retention_period" {
 
 variable "alb_dns_name" {
   description = "The DNS name of the ALB from ingress"
+  type        = string
+  default     = null
+}
+
+variable "admin_principal_arn" {
+  description = "The ARN of the admin principal to register in EKS access entries"
+  type        = string
+  default     = null
+}
+
+variable "cicd_role_arn" {
+  description = "The ARN of an existing CI/CD IAM role to grant EKS access"
   type        = string
   default     = null
 }
