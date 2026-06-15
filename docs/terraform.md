@@ -134,7 +134,32 @@ helm install external-secrets external-secrets/external-secrets \
 helm repo add kedacore https://kedacore.github.io/charts
 helm repo update
 helm install keda kedacore/keda -n keda --create-namespace
+
+# Install Argo Rollouts (Progressive Delivery)
+helm repo add argo https://argoproj.github.io/argo-helm
+helm repo update
+helm install argo-rollouts argo/argo-rollouts -n argo-rollouts --create-namespace
 ```
+
+---
+
+## 🗑️ Destroying the Infrastructure
+
+When destroying the environment, you cannot simply run `terraform destroy` directly if there are active EKS Fargate profiles. AWS blocks the deletion of an EKS cluster if it has Fargate profiles attached, and Terraform will hang or fail.
+
+**Teardown Sequence:**
+1. **Delete Fargate Profiles:** Delete all Fargate profiles from the EKS cluster via the AWS Console or AWS CLI. 
+   *(Alternatively, run the `scratch/delete_fargate_profiles.sh` script if it is available in your workspace).*
+2. **Destroy Staging:**
+   ```bash
+   cd infra/environments/staging
+   terraform destroy -auto-approve
+   ```
+3. **Destroy Production:**
+   ```bash
+   cd infra/environments/prod
+   terraform destroy -auto-approve
+   ```
 
 ---
 
