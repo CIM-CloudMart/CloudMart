@@ -1,7 +1,5 @@
 name: CI/CD Pipeline
 
-# Triggered on push to main/develop AND on PRs targeting those branches.
-# feature/* branches only run lint+test through the PR trigger.
 on:
   push:
     branches:
@@ -16,9 +14,8 @@ permissions:
   contents: write
   id-token: write
 
-# ──────────────────────────────────────────────────────────────────────────────
-# JOB 1 – Lint & Unit Tests (runs for every push / PR on main or develop)
-# ──────────────────────────────────────────────────────────────────────────────
+# JOB 1 – Lint & Unit Tests
+# Runs for every push / PR on main or develop
 jobs:
   lint-test:
     name: Lint & Test – ${{ matrix.service }}
@@ -31,7 +28,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # ── Node.js services ──────────────────────────────────────────────────
+      # Node.js services
       - name: Setup Node.js
         if: matrix.service == 'frontend' || matrix.service == 'order-service' || matrix.service == 'notification-service'
         uses: actions/setup-node@v4
@@ -48,7 +45,7 @@ jobs:
           npm run lint --if-present
           npm test --if-present
 
-      # ── Python services ───────────────────────────────────────────────────
+      # Python services
       - name: Setup Python
         if: matrix.service == 'product-service' || matrix.service == 'user-service'
         uses: actions/setup-python@v5
@@ -66,9 +63,7 @@ jobs:
           flake8 . --count --max-line-length=127 --statistics
           pytest --tb=short || true
 
-# ──────────────────────────────────────────────────────────────────────────────
 # JOB 2 – Kubernetes Manifest Validation
-# ──────────────────────────────────────────────────────────────────────────────
   manifest-validation:
     name: Kubeconform Manifest Validation
     runs-on: ubuntu-latest
@@ -103,10 +98,8 @@ jobs:
             -f ./helm-charts/charts/cloudmart/values-prod.yaml \
             | kubeconform -strict -summary -ignore-missing-schemas
 
-# ──────────────────────────────────────────────────────────────────────────────
-# JOB 3 – Build → Trivy Scan (CRITICAL = fail) → Push to ECR
-#          Only runs on push to main or develop (not on PRs)
-# ──────────────────────────────────────────────────────────────────────────────
+# JOB 3 – Build → Trivy Scan → Push to ECR
+# Only runs on push to main or develop (not on PRs)
   build-scan-push:
     name: Build, Scan & Push – ${{ matrix.service }}
     needs: [lint-test, manifest-validation]
@@ -140,7 +133,7 @@ jobs:
             -t local-image:latest \
             services/${{ matrix.service }}
 
-      # ── Trivy: CRITICAL findings = pipeline failure ───────────────────────
+      # Trivy: CRITICAL findings leads to pipeline failure
       - name: Run Trivy Vulnerability Scan
         id: trivy-scan
         uses: aquasecurity/trivy-action@v0.36.0
@@ -166,7 +159,7 @@ jobs:
             echo "</details>" >> $GITHUB_STEP_SUMMARY
           fi
 
-      # ── Push to ECR (only if scan passed) ─────────────────────────────────
+      # Push to ECR if scan passed
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -193,28 +186,20 @@ jobs:
           docker push "${ECR_REPO}:latest"
           docker push "${ECR_REPO}:${ENV_SHORT}"
 
-# ──────────────────────────────────────────────────────────────────────────────
-# JOB 4 – Manual Approval Gate (production only)
-# ──────────────────────────────────────────────────────────────────────────────
+# JOB 4 – Manual Approval Gate production only
   approval:
     name: Production Approval Gate
     needs: [build-scan-push]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    environment: production          # ← GitHub environment with required reviewers
+    environment: production
     steps:
       - name: Await manual approval
         run: echo "✅ Production deployment approved."
 
-# ──────────────────────────────────────────────────────────────────────────────
-# JOB 5 – Deploy (staging auto / production after approval)
-#          Rolling update strategy with health-check gate
-# ──────────────────────────────────────────────────────────────────────────────
   deploy:
     name: Deploy to ${{ github.ref == 'refs/heads/main' && 'Production' || 'Staging' }}
     needs: [build-scan-push, approval]
-    # approval is skipped for develop; use always() + result check so the job
-    # still runs when 'approval' is skipped (staging path)
     if: |
       always() &&
       needs.build-scan-push.result == 'success' &&
@@ -251,7 +236,6 @@ jobs:
           fi
           echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
 
-      # ── GitOps: bump image tags in values file ────────────────────────────
       - name: Update GitOps Values
         run: |
           sudo wget -qO /usr/local/bin/yq \
@@ -286,7 +270,7 @@ jobs:
         with:
           version: v3.14.0
 
-      # ── Rolling update deploy ─────────────────────────────────────────────
+      # Rolling update deployment
       - name: Helm Upgrade (Rolling Update)
         run: |
           ENV_SHORT="${{ steps.env.outputs.env_short }}"
@@ -302,7 +286,7 @@ jobs:
             --timeout 10m \
             --cleanup-on-fail
 
-      # ── Health-check gate: wait for all deployments/rollouts to become available ─────
+      # Health-check gate: wait for all deployments/rollouts to become available
       - name: Install kubectl-argo-rollouts plugin
         run: |
           ARGO_ROLLOUTS_VERSION="v1.8.3"
@@ -333,8 +317,8 @@ jobs:
             fi
           done
           echo "✅ All workloads are healthy."
-      # ── Post-deployment smoke tests (port-forward → curl on CI runner) ──────
-      # Why port-forward instead of kubectl run:
+      # Post-deployment smoke tests (port-forward → curl on CI runner)
+      # For more info: Why port-forward instead of kubectl run:
       #   EKS Fargate must provision a new node per ephemeral pod (~60s).
       #   Port-forwarding reuses the already-running pods instantly.
       - name: Post-Deployment Smoke Tests
@@ -392,9 +376,9 @@ jobs:
 
             echo "  Response: ${STATUS}"
             if [ "${STATUS}" = "200" ]; then
-              echo "  ✅ ${SVC} is healthy"
+              echo "  ${SVC} is healthy"
             else
-              echo "  ❌ ${SVC} returned ${STATUS} — smoke test FAILED"
+              echo "  ${SVC} returned ${STATUS} — smoke test FAILED"
               FAILED=1
             fi
           done
@@ -403,12 +387,12 @@ jobs:
             echo "One or more smoke tests failed. Aborting."
             exit 1
           fi
-          echo "All smoke tests passed ✅"
+          echo "All smoke tests passed"
 
       - name: Deployment Summary
         if: always()
         run: |
-          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| **Environment** | \`${{ steps.env.outputs.env_short }}\` |" >> $GITHUB_STEP_SUMMARY
