@@ -41,7 +41,7 @@ const styles = {
     padding: '2px 8px', borderRadius: '12px', fontSize: '12px',
   },
   btn: {
-    background: '#e94560', color: '#fff', border: 'none',
+    background: '#45e971', color: '#fff', border: 'none',
     padding: '10px 20px', borderRadius: '4px', cursor: 'pointer',
     fontSize: '14px', fontWeight: '600',
   },
