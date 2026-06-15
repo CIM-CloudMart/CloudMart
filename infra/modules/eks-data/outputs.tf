@@ -22,8 +22,3 @@ output "cluster_certificate_authority_data" {
   description = "EKS Cluster CA certificate data"
   value       = data.aws_eks_cluster.shared.certificate_authority[0].data
 }
-
-output "oidc_provider_arn" {
-  description = "ARN of the EKS OIDC provider (for IRSA)"
-  value       = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${replace(data.aws_eks_cluster.shared.identity[0].oidc[0].issuer, "https://", "")}"
-}

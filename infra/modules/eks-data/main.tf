@@ -5,4 +5,6 @@ data "aws_eks_cluster" "shared" {
   name = var.cluster_name
 }
 
-data "aws_caller_identity" "current" {}
+data "aws_iam_openid_connect_provider" "shared" {
+  url = data.aws_eks_cluster.shared.identity[0].oidc[0].issuer
+}

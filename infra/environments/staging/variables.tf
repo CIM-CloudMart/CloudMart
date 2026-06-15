@@ -13,7 +13,7 @@ variable "environment" {
 variable "team" {
   description = "Team name (used for globally unique S3 bucket naming)"
   type        = string
-  default     = "team-axel"
+  default     = "team-axel-8"
 }
 
 variable "region" {
@@ -43,7 +43,7 @@ variable "from_email" {
 variable "use_fargate" {
   description = "Deploy workloads on Fargate"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "kubernetes_version" {
@@ -67,7 +67,7 @@ variable "desired_node_count" {
 variable "enable_waf" {
   description = "Enable AWS WAF"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "domain_name" {

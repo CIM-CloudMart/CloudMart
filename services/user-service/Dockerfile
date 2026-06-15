@@ -1,15 +1,27 @@
 # ---- Stage 1: Build dependencies ----
-FROM python:3.11-slim AS builder
+# Use Alpine-based image to minimise OS-level CVEs
+FROM python:3.12-alpine3.21 AS builder
 
 WORKDIR /build
+
+# Upgrade OS packages first to patch Alpine-level CVEs, then add build deps
+RUN apk upgrade --no-cache && \
+    apk add --no-cache gcc musl-dev libffi-dev libpq-dev
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # ---- Stage 2: Runtime ----
-FROM python:3.11-slim
+FROM python:3.12-alpine3.21
+
+# Upgrade OS packages to patch Alpine-level CVEs
+RUN apk upgrade --no-cache
+
+# Runtime deps for psycopg2-binary
+RUN apk add --no-cache libpq
 
 # Create non-root user
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+RUN addgroup -S appuser && adduser -S appuser -G appuser
 
 WORKDIR /app
 

@@ -1,4 +1,17 @@
 # EKS Cluster — Fargate-first for free tier / low vCPU quota
+data "aws_caller_identity" "current" {}
+
+locals {
+  caller_arn = data.aws_caller_identity.current.arn
+  # STS assumed roles return arn:aws:sts::... which is invalid for access entries.
+  # Convert to the corresponding IAM role ARN if necessary.
+  resolved_admin_arn = length(regexall("^arn:aws:sts::", local.caller_arn)) > 0 ? replace(
+    local.caller_arn,
+    "/^arn:aws:sts::(\\d+):assumed-role/(.+)/[^/]+$/",
+    "arn:aws:iam::$1:role/$2"
+  ) : local.caller_arn
+}
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 21.0"
@@ -47,6 +60,36 @@ module "eks" {
         { namespace = "external-secrets" }
       ]
     }
+    amazon_cloudwatch = {
+      name = "amazon-cloudwatch"
+      selectors = [
+        { namespace = "amazon-cloudwatch" }
+      ]
+    }
+    kyverno = {
+      name = "kyverno"
+      selectors = [
+        { namespace = "kyverno" }
+      ]
+    }
+    keda = {
+      name = "keda"
+      selectors = [
+        { namespace = "keda" }
+      ]
+    }
+    argo_rollouts = {
+      name = "argo-rollouts"
+      selectors = [
+        { namespace = "argo-rollouts" }
+      ]
+    }
+    monitoring = {
+      name = "monitoring"
+      selectors = [
+        { namespace = "monitoring" }
+      ]
+    }
   } : {}
 
   eks_managed_node_groups = var.use_fargate ? {} : {
@@ -54,8 +97,8 @@ module "eks" {
       name            = "main"
       use_name_prefix = false
       instance_types  = [var.node_instance_type]
-      min_size        = var.desired_node_count
-      max_size        = var.desired_node_count
+      min_size        = 2
+      max_size        = 5
       desired_size    = var.desired_node_count
       capacity_type   = "ON_DEMAND"
 
@@ -79,16 +122,24 @@ module "eks" {
         computeType = "Fargate"
       })
     }
+    amazon-cloudwatch-observability = {
+      resolve_conflicts_on_create = "OVERWRITE"
+      resolve_conflicts_on_update = "OVERWRITE"
+    }
     } : {
     coredns    = {}
     kube-proxy = {}
     vpc-cni    = {}
+    amazon-cloudwatch-observability = {
+      resolve_conflicts_on_create = "OVERWRITE"
+      resolve_conflicts_on_update = "OVERWRITE"
+    }
   }
 
   access_entries = {
     admin = {
       kubernetes_groups = []
-      principal_arn     = "arn:aws:iam::779417963796:user/Dinuka"
+      principal_arn     = var.admin_principal_arn != null && var.admin_principal_arn != "" ? var.admin_principal_arn : local.resolved_admin_arn
       policy_associations = {
         admin = {
           policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"

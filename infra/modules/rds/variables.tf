@@ -85,3 +85,9 @@ variable "db_password" {
   sensitive   = true
 }
 
+variable "db_subnet_group_name_suffix" {
+  description = "Optional suffix for the DB subnet group name"
+  type        = string
+  default     = ""
+}
+

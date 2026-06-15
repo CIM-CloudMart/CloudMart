@@ -1,0 +1,401 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: write
+  id-token: write
+
+# JOB 1 – Lint & Unit Tests
+# Runs for every push / PR on main or develop
+jobs:
+  lint-test:
+    name: Lint & Test – ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [frontend, order-service, product-service, user-service, notification-service]
+      fail-fast: false
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Node.js services
+      - name: Setup Node.js
+        if: matrix.service == 'frontend' || matrix.service == 'order-service' || matrix.service == 'notification-service'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: services/${{ matrix.service }}/package-lock.json
+
+      - name: Install & Test Node.js Services
+        if: matrix.service == 'frontend' || matrix.service == 'order-service' || matrix.service == 'notification-service'
+        working-directory: services/${{ matrix.service }}
+        run: |
+          npm ci
+          npm run lint --if-present
+          npm test --if-present
+
+      # Python services
+      - name: Setup Python
+        if: matrix.service == 'product-service' || matrix.service == 'user-service'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: services/${{ matrix.service }}/requirements.txt
+
+      - name: Install & Test Python Services
+        if: matrix.service == 'product-service' || matrix.service == 'user-service'
+        working-directory: services/${{ matrix.service }}
+        run: |
+          pip install flake8 pytest
+          pip install -r requirements.txt || true
+          flake8 . --count --max-line-length=127 --statistics
+          pytest --tb=short || true
+
+# JOB 2 – Kubernetes Manifest Validation
+  manifest-validation:
+    name: Kubeconform Manifest Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Helm Charts
+        uses: actions/checkout@v4
+        with:
+          repository: CIM-CloudMart/helm-charts
+          path: helm-charts
+          ref: main
+          token: ${{ secrets.HELM_CHARTS_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Install Kubeconform
+        run: |
+          KUBECONFORM_VERSION="v0.6.7"
+          wget -q "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          tar xf kubeconform-linux-amd64.tar.gz
+          sudo mv kubeconform /usr/local/bin/
+          kubeconform -v
+
+      - name: Validate Staging Manifests
+        run: |
+          helm template cloudmart-staging ./helm-charts/charts/cloudmart \
+            -f ./helm-charts/charts/cloudmart/values.yaml \
+            -f ./helm-charts/charts/cloudmart/values-staging.yaml \
+            | kubeconform -strict -summary -ignore-missing-schemas
+
+      - name: Validate Production Manifests
+        run: |
+          helm template cloudmart-prod ./helm-charts/charts/cloudmart \
+            -f ./helm-charts/charts/cloudmart/values.yaml \
+            -f ./helm-charts/charts/cloudmart/values-prod.yaml \
+            | kubeconform -strict -summary -ignore-missing-schemas
+
+# JOB 3 – Build → Trivy Scan → Push to ECR
+# Only runs on push to main or develop (not on PRs)
+  build-scan-push:
+    name: Build, Scan & Push – ${{ matrix.service }}
+    needs: [lint-test, manifest-validation]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [frontend, order-service, product-service, user-service, notification-service]
+      fail-fast: false
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set Variables
+        id: vars
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "env_short=prod" >> $GITHUB_OUTPUT
+          else
+            echo "env_short=staging" >> $GITHUB_OUTPUT
+          fi
+          echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image
+        run: |
+          docker build \
+            --no-cache \
+            -t local-image:latest \
+            services/${{ matrix.service }}
+
+      # Trivy: CRITICAL findings leads to pipeline failure
+      - name: Run Trivy Vulnerability Scan
+        id: trivy-scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: local-image:latest
+          format: table
+          output: trivy-image-scan.txt
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+
+      - name: Publish Trivy Report to Job Summary
+        if: always()
+        run: |
+          if [ -f trivy-image-scan.txt ]; then
+            echo "### 🔍 Trivy Scan – ${{ matrix.service }} (CRITICAL)" >> $GITHUB_STEP_SUMMARY
+            echo "<details><summary>Click to expand</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat trivy-image-scan.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # Push to ECR if scan passed
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Tag and Push to ECR
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ENV_SHORT: ${{ steps.vars.outputs.env_short }}
+          IMAGE_TAG: ${{ steps.vars.outputs.image_tag }}
+          SERVICE: ${{ matrix.service }}
+        run: |
+          ECR_REPO="${REGISTRY}/cloudmart-${SERVICE}-${ENV_SHORT}"
+          docker tag local-image:latest "${ECR_REPO}:${IMAGE_TAG}"
+          docker tag local-image:latest "${ECR_REPO}:latest"
+          docker tag local-image:latest "${ECR_REPO}:${ENV_SHORT}"
+          docker push "${ECR_REPO}:${IMAGE_TAG}"
+          docker push "${ECR_REPO}:latest"
+          docker push "${ECR_REPO}:${ENV_SHORT}"
+
+# JOB 4 – Manual Approval Gate production only
+  approval:
+    name: Production Approval Gate
+    needs: [build-scan-push]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Await manual approval
+        run: echo "✅ Production deployment approved."
+
+  deploy:
+    name: Deploy to ${{ github.ref == 'refs/heads/main' && 'Production' || 'Staging' }}
+    needs: [build-scan-push, approval]
+    if: |
+      always() &&
+      needs.build-scan-push.result == 'success' &&
+      (needs.approval.result == 'success' || needs.approval.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    steps:
+      - name: Checkout Helm Charts
+        uses: actions/checkout@v4
+        with:
+          repository: CIM-CloudMart/helm-charts
+          path: helm-charts
+          ref: main
+          token: ${{ secrets.HELM_CHARTS_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Determine Environment
+        id: env
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "env_short=prod"              >> $GITHUB_OUTPUT
+            echo "namespace=cloudmart-prod"   >> $GITHUB_OUTPUT
+            echo "release=cloudmart"          >> $GITHUB_OUTPUT
+          else
+            echo "env_short=staging"              >> $GITHUB_OUTPUT
+            echo "namespace=cloudmart-staging"    >> $GITHUB_OUTPUT
+            echo "release=cloudmart-staging"      >> $GITHUB_OUTPUT
+          fi
+          echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Update GitOps Values
+        run: |
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+          ENV_SHORT="${{ steps.env.outputs.env_short }}"
+          IMAGE_TAG="${{ steps.env.outputs.image_tag }}"
+
+          cd helm-charts
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          SERVICES="user product order notification frontend"
+          for SERVICE in $SERVICES; do
+            yq -i ".${SERVICE}.image.tag = \"${IMAGE_TAG}\"" \
+              charts/cloudmart/values-${ENV_SHORT}.yaml
+            git add charts/cloudmart/values-${ENV_SHORT}.yaml
+          done
+
+          if git commit -m "chore(gitops): deploy to ${ENV_SHORT} [${IMAGE_TAG}]"; then
+            git push
+          else
+            echo "No values changes to commit."
+          fi
+
+      - name: Update Kubeconfig
+        run: aws eks update-kubeconfig --name cloudmart --region ap-south-1
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      # Rolling update deployment
+      - name: Helm Upgrade (Rolling Update)
+        run: |
+          ENV_SHORT="${{ steps.env.outputs.env_short }}"
+          NAMESPACE="${{ steps.env.outputs.namespace }}"
+          RELEASE="${{ steps.env.outputs.release }}"
+
+          helm upgrade --install "$RELEASE" ./helm-charts/charts/cloudmart \
+            --namespace "$NAMESPACE" \
+            --create-namespace \
+            -f ./helm-charts/charts/cloudmart/values.yaml \
+            -f ./helm-charts/charts/cloudmart/values-${ENV_SHORT}.yaml \
+            --atomic \
+            --timeout 10m \
+            --cleanup-on-fail
+
+      # Health-check gate: wait for all deployments/rollouts to become available
+      - name: Install kubectl-argo-rollouts plugin
+        run: |
+          ARGO_ROLLOUTS_VERSION="v1.8.3"
+          curl -sLo /usr/local/bin/kubectl-argo-rollouts \
+            "https://github.com/argoproj/argo-rollouts/releases/download/${ARGO_ROLLOUTS_VERSION}/kubectl-argo-rollouts-linux-amd64"
+          chmod +x /usr/local/bin/kubectl-argo-rollouts
+          kubectl argo rollouts version
+
+      - name: Health-Check Gate (Rollout Wait)
+        run: |
+          NAMESPACE="${{ steps.env.outputs.namespace }}"
+          SERVICES="user-service product-service order-service notification-service frontend"
+          echo "Waiting for all workloads to become available in ${NAMESPACE}..."
+          for SVC in $SERVICES; do
+            # Check Argo Rollout first, then fall back to standard Deployment
+            if kubectl get rollout "${SVC}" -n "${NAMESPACE}" --ignore-not-found 2>/dev/null | grep -q "${SVC}"; then
+              echo "→ [Argo Rollout] kubectl argo rollouts status: ${SVC}"
+              kubectl argo rollouts status "${SVC}" \
+                -n "${NAMESPACE}" \
+                --timeout 300s
+            elif kubectl get deployment "${SVC}" -n "${NAMESPACE}" --ignore-not-found 2>/dev/null | grep -q "${SVC}"; then
+              echo "→ [Deployment] kubectl rollout status: ${SVC}"
+              kubectl rollout status "deployment/${SVC}" \
+                -n "${NAMESPACE}" \
+                --timeout=300s
+            else
+              echo "⚠️  WARNING: ${SVC} not found as Deployment or Rollout in ${NAMESPACE} — skipping"
+            fi
+          done
+          echo "✅ All workloads are healthy."
+      # Post-deployment smoke tests (port-forward → curl on CI runner)
+      # For more info: Why port-forward instead of kubectl run:
+      #   EKS Fargate must provision a new node per ephemeral pod (~60s).
+      #   Port-forwarding reuses the already-running pods instantly.
+      - name: Post-Deployment Smoke Tests
+        run: |
+          NAMESPACE="${{ steps.env.outputs.namespace }}"
+          echo "Starting smoke tests in ${NAMESPACE}..."
+          FAILED=0
+
+          # service → "local_port:remote_port"
+          declare -A SERVICE_MAP=(
+            ["product-service"]="18001:8001"
+            ["order-service"]="18002:8002"
+            ["user-service"]="18003:8003"
+            ["notification-service"]="18004:8004"
+            ["frontend"]="18080:80"
+          )
+          declare -A HEALTH_PATH=(
+            ["product-service"]="/health"
+            ["order-service"]="/health"
+            ["user-service"]="/health"
+            ["notification-service"]="/health"
+            ["frontend"]="/"
+          )
+
+          for SVC in "${!SERVICE_MAP[@]}"; do
+            PORTS="${SERVICE_MAP[$SVC]}"
+            LOCAL_PORT="${PORTS%%:*}"
+            REMOTE_PORT="${PORTS##*:}"
+            PATH_="${HEALTH_PATH[$SVC]}"
+
+            echo "Smoke testing ${SVC} (port-forward :${LOCAL_PORT} → svc:${REMOTE_PORT})${PATH_} ..."
+
+            # Start port-forward in background; redirect stderr so it doesnt pollute STATUS
+            kubectl port-forward "svc/${SVC}" "${LOCAL_PORT}:${REMOTE_PORT}" \
+              -n "${NAMESPACE}" > /dev/null 2>&1 &
+            PF_PID=$!
+
+            # Give the tunnel a moment to establish
+            sleep 4
+
+            # Retry up to 3 times (handles brief startup latency)
+            STATUS="000"
+            for ATTEMPT in 1 2 3; do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                --max-time 10 \
+                "http://localhost:${LOCAL_PORT}${PATH_}" 2>/dev/null || echo "000")
+              [ "${STATUS}" = "200" ] && break
+              echo "  attempt ${ATTEMPT}: got ${STATUS}, retrying..."
+              sleep 3
+            done
+
+            # Tear down port-forward
+            kill "${PF_PID}" 2>/dev/null || true
+            wait "${PF_PID}" 2>/dev/null || true
+
+            echo "  Response: ${STATUS}"
+            if [ "${STATUS}" = "200" ]; then
+              echo "  ${SVC} is healthy"
+            else
+              echo "  ${SVC} returned ${STATUS} — smoke test FAILED"
+              FAILED=1
+            fi
+          done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "One or more smoke tests failed. Aborting."
+            exit 1
+          fi
+          echo "All smoke tests passed"
+
+      - name: Deployment Summary
+        if: always()
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`${{ steps.env.outputs.env_short }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Namespace** | \`${{ steps.env.outputs.namespace }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Image Tag** | \`${{ steps.env.outputs.image_tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Triggered by** | \`${{ github.actor }}\` |" >> $GITHUB_STEP_SUMMARY

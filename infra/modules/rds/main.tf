@@ -1,7 +1,7 @@
 # ==================== RDS PostgreSQL Module ====================
 
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.project}-db-subnet-group-${var.environment}"
+  name       = "${var.project}-db-subnet-group-${var.environment}${var.db_subnet_group_name_suffix}"
   subnet_ids = var.private_data_subnet_ids
 }
 
@@ -68,6 +68,7 @@ resource "aws_db_instance" "postgres" {
   allocated_storage     = 20
   max_allocated_storage = var.max_allocated_storage
   multi_az              = var.multi_az
+  apply_immediately     = true
 
   db_name  = "cloudmart"
   username = var.db_username

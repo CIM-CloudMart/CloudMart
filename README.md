@@ -53,8 +53,12 @@ CloudMart is a microservices-based e-commerce platform used as the group assignm
 ### Run with Docker Compose
 
 ```bash
-git clone <your-repo-url>
-cd cloudmart-starter
+git clone https://github.com/CIM-CloudMart/CloudMart.git
+```
+```bash
+cd CloudMart
+```
+```bash
 docker compose up --build
 ```
 
@@ -198,21 +202,30 @@ cloudmart-starter/
 
 ## Cloud Provider
 
-**Chosen provider:** _[Your group fills this in: AWS / GCP / Azure]_
+**Chosen provider:** AWS
 
 ## Team Members
 
 | Name | Student ID | Responsibilities |
 |------|-----------|-----------------|
-| | | |
-| | | |
-| | | |
-| | | |
-| | | |
+| Bandarigoda D.M. | 215016G | Infrastructure as Code, Networking |
+| Wijesekara D.R. | 215126T | Observability and Monitoring |
+| Imesh B.A.A. | 215054U | Cost Management and Disaster Recovery |
+| Ranasingha R.A.D.S. | 215096A | Kubernetes Management, Documentation |
+| Hasari G.V.J. | 215049J | Application, Microservice and Databases |
+| Paranietharan P. | 214145R | Containerization and CI/CD Pipeline |
 
 ## AI Tool Disclosure
 
-_[If your group used GitHub Copilot, ChatGPT, Claude, or any AI assistant, disclose here: which tools, for which tasks, and what review process you applied.]_
+Our group used the following AI tools during this project:
+
+| Tool | Tasks | Review Process |
+|------|-------|----------------|
+| **Antigravity (Google DeepMind)** | Debugging infrastructure code, fixing Terraform deployment failures, resolving Kubernetes/Helm issues, troubleshooting CI/CD pipeline errors, and iterating on configuration files | All AI-suggested fixes were reviewed manually, tested in a staging environment, and verified against expected outputs before being merged |
+| **ChatGPT (OpenAI)** | Learning AWS concepts, generating AWS CLI commands, understanding AWS service configurations (EKS, ECR, SQS, DynamoDB, SES), and debugging AWS CLI errors | Commands and explanations were cross-referenced with the official AWS documentation before being applied to the project |
+| **Claude (Anthropic)** | Generating prompts, learning AWS architecture best practices, researching IAM policies, and understanding AWS CLI command syntax and debugging | Output was reviewed against AWS official docs and tested in a sandboxed AWS environment before use in production |
+
+All AI-generated content was reviewed, tested, and validated by the team before inclusion in the codebase or infrastructure. No AI output was used without human oversight and verification.
 
 ---
 

@@ -13,7 +13,7 @@ variable "environment" {
 variable "team" {
   description = "Team name (used for globally unique S3 bucket naming)"
   type        = string
-  default     = "team-axel"
+  default     = "team-axel-8"
 }
 
 variable "region" {
@@ -43,7 +43,7 @@ variable "from_email" {
 variable "use_fargate" {
   description = "Deploy workloads on Fargate"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "kubernetes_version" {
@@ -67,7 +67,7 @@ variable "desired_node_count" {
 variable "enable_waf" {
   description = "Enable AWS WAF"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "domain_name" {
@@ -92,4 +92,46 @@ variable "enable_guardduty" {
   description = "Enable GuardDuty monitoring"
   type        = bool
   default     = false
+}
+
+variable "rds_instance_class" {
+  description = "The database instance class"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "rds_multi_az" {
+  description = "Whether the RDS instance should be Multi‑AZ"
+  type        = bool
+  default     = true
+}
+
+variable "rds_max_allocated_storage" {
+  description = "The upper limit for RDS storage autoscaling"
+  type        = number
+  default     = 20
+}
+
+variable "backup_retention_period" {
+  description = "Backup retention days"
+  type        = number
+  default     = 1
+}
+
+variable "alb_dns_name" {
+  description = "The DNS name of the ALB from ingress"
+  type        = string
+  default     = null
+}
+
+variable "admin_principal_arn" {
+  description = "The ARN of the admin principal to register in EKS access entries"
+  type        = string
+  default     = null
+}
+
+variable "cicd_role_arn" {
+  description = "The ARN of an existing CI/CD IAM role to grant EKS access"
+  type        = string
+  default     = null
 }

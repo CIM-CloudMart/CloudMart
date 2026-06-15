@@ -231,7 +231,7 @@ To test and demonstrate this failover process:
 1.  **Locate S3 Website Endpoint**: Find the public URL of the failover website:
     ```bash
     aws s3api get-bucket-website \
-      --bucket failover-cloudmart-prod-team-axel \
+      --bucket failover-cloudmart-prod-team-axel-8 \
       --region ap-south-1
     ```
 2.  **Simulate ALB Failure**: Disable the ingress routing or simulate an EKS cluster failure by setting ingress target ports to an unreachable state (or temporarily delete the ingress resource):

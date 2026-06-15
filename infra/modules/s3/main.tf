@@ -1,11 +1,14 @@
 # ==================== S3 Module ====================
 
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 resource "aws_s3_bucket" "storage" {
-  bucket        = "${var.project}-storage-${var.team}-${var.environment}"
+  bucket        = "${var.project}-storage-${var.team}-${var.environment}-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.region}"
   force_destroy = var.environment != "prod"
 
   tags = {
-    Name = "${var.project}-storage-${var.team}-${var.environment}"
+    Name = "${var.project}-storage-${var.team}-${var.environment}-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.region}"
   }
 }
 
@@ -37,11 +40,11 @@ resource "aws_s3_bucket_public_access_block" "storage" {
 
 # ==================== S3 Failover Website ====================
 resource "aws_s3_bucket" "failover_website" {
-  bucket        = "failover-${var.project}-${var.environment}-${var.team}"
+  bucket        = "failover-${var.project}-${var.environment}-${var.team}-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.region}"
   force_destroy = true
 
   tags = {
-    Name = "failover-${var.project}-${var.environment}-${var.team}"
+    Name = "failover-${var.project}-${var.environment}-${var.team}-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.region}"
   }
 }
 
