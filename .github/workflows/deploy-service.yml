@@ -235,7 +235,14 @@ jobs:
         run: |
           NAMESPACE="${{ needs.resolve.outputs.namespace }}"
           for SERVICE in $(echo '${{ needs.resolve.outputs.services }}' | jq -r '.[]'); do
-            kubectl rollout status "deployment/${SERVICE}" -n "${NAMESPACE}" --timeout=300s
+            if kubectl get deployment "${SERVICE}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+              kubectl rollout status "deployment/${SERVICE}" -n "${NAMESPACE}" --timeout=300s
+            elif kubectl get rollout "${SERVICE}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+              kubectl wait --for=condition=Available "rollout/${SERVICE}" -n "${NAMESPACE}" --timeout=300s
+            else
+              echo "Error: Neither deployment nor rollout found for ${SERVICE}"
+              exit 1
+            fi
           done
 
   notify:
