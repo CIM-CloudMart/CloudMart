@@ -150,7 +150,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            ["ContainerInsights", "pod_cpu_utilization", "ClusterName", "cloudmart-eks-${var.environment}", "Namespace", "cloudmart-${var.environment}"]
+            ["ContainerInsights", "pod_cpu_utilization", "ClusterName", "${var.project}", "Namespace", "cloudmart-${var.environment}"]
           ],
           period = 300,
           stat   = "Average",
@@ -166,7 +166,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            ["ContainerInsights", "pod_memory_utilization", "ClusterName", "cloudmart-eks-${var.environment}", "Namespace", "cloudmart-${var.environment}"]
+            ["ContainerInsights", "pod_memory_utilization", "ClusterName", "${var.project}", "Namespace", "cloudmart-${var.environment}"]
           ],
           period = 300,
           stat   = "Average",
