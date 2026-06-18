@@ -11,5 +11,5 @@ variable "environment" {
 variable "from_email" {
   description = "SES verified sender email address"
   type        = string
-  default     = "noreply@cloudmart.example"
+  default     = "tradeasy.official01@gmail.com"
 }

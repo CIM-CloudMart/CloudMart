@@ -301,7 +301,7 @@ services:
       - EVENTS_TABLE=cloudmart-processed-events-prod
       # Email backend — console for local dev; set to 'ses' in production
       - EMAIL_BACKEND=console
-      - FROM_EMAIL=no-reply@cloudmart.com
+      - FROM_EMAIL=tradeasy.official01@gmail.com
       - AWS_REGION=ap-south-1
       # AWS credentials — LocalStack accepts any non-empty value
       - AWS_ACCESS_KEY_ID=test
