@@ -58,21 +58,6 @@ data "aws_iam_policy_document" "product_service_policy" {
     resources = [var.dynamodb_table_arn]
   }
 
-
-  statement {
-    effect = "Allow"
-    actions = [
-      "s3:GetObject",
-      "s3:PutObject",
-      "s3:DeleteObject",
-      "s3:ListBucket"
-    ]
-    resources = [
-      var.storage_bucket_arn,
-      "${var.storage_bucket_arn}/*"
-    ]
-  }
-
   statement {
     effect = "Allow"
     actions = [
@@ -191,19 +176,6 @@ data "aws_iam_policy_document" "notification_service_policy" {
   statement {
     effect = "Allow"
     actions = [
-      "dynamodb:GetItem",
-      "dynamodb:PutItem",
-      "dynamodb:UpdateItem",
-      "dynamodb:DeleteItem",
-      "dynamodb:Query",
-      "dynamodb:Scan"
-    ]
-    resources = [var.dynamodb_events_table_arn]
-  }
-
-  statement {
-    effect = "Allow"
-    actions = [
       "ses:SendEmail",
       "ses:SendRawEmail"
     ]
@@ -258,8 +230,7 @@ data "aws_iam_policy_document" "user_service_policy" {
       "secretsmanager:GetSecretValue"
     ]
     resources = [
-      var.db_secret_arn,
-      var.jwt_secret_arn
+      var.db_secret_arn
     ]
   }
 
@@ -277,6 +248,66 @@ resource "aws_iam_role_policy" "user_service" {
   name   = "${var.project}-user-service-policy-${var.environment}"
   role   = aws_iam_role.user_service.id
   policy = data.aws_iam_policy_document.user_service_policy.json
+}
+
+# ==================== User JWT Secret IAM Role ====================
+
+data "aws_iam_policy_document" "user_jwt_assume_role" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    effect  = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = ["arn:${local.partition}:iam::${local.account_id}:oidc-provider/${local.oidc_provider}"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider}:sub"
+      values = [
+        "system:serviceaccount:cloudmart-prod:user-jwt-sa",
+        "system:serviceaccount:cloudmart-staging:user-jwt-sa"
+      ]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "user_jwt" {
+  name               = "${var.project}-user-jwt-role-${var.environment}"
+  assume_role_policy = data.aws_iam_policy_document.user_jwt_assume_role.json
+}
+
+data "aws_iam_policy_document" "user_jwt_policy" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "secretsmanager:GetSecretValue"
+    ]
+    resources = [
+      var.jwt_secret_arn
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "kms:Decrypt"
+    ]
+    resources = [var.kms_key_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "user_jwt" {
+  name   = "${var.project}-user-jwt-policy-${var.environment}"
+  role   = aws_iam_role.user_jwt.id
+  policy = data.aws_iam_policy_document.user_jwt_policy.json
 }
 
 # ==================== AWS Load Balancer Controller IAM Role ====================
