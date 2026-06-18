@@ -496,3 +496,54 @@ resource "aws_iam_role_policy" "cluster_autoscaler" {
   policy = data.aws_iam_policy_document.cluster_autoscaler_policy.json
 }
 
+resource "aws_iam_role_policy_attachment" "product_service_xray" {
+  role       = aws_iam_role.product_service.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "order_service_xray" {
+  role       = aws_iam_role.order_service.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess"
+}
+
+# ==================== ADOT Collector IAM Role ====================
+
+data "aws_iam_policy_document" "adot_collector_assume_role" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    effect  = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = ["arn:${local.partition}:iam::${local.account_id}:oidc-provider/${local.oidc_provider}"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider}:sub"
+      values = [
+        "system:serviceaccount:cloudmart-prod:adot-collector",
+        "system:serviceaccount:cloudmart-staging:adot-collector"
+      ]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "adot_collector" {
+  name               = "${var.project}-adot-collector-role-${var.environment}"
+  assume_role_policy = data.aws_iam_policy_document.adot_collector_assume_role.json
+}
+
+resource "aws_iam_role_policy_attachment" "adot_collector_cloudwatch" {
+  role       = aws_iam_role.adot_collector.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
+
+

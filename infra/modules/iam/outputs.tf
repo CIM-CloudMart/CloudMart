@@ -33,3 +33,9 @@ output "github_actions_role_arn" {
   description = "The ARN of the IAM role for GitHub Actions"
 }
 
+output "adot_collector_role_arn" {
+  value       = aws_iam_role.adot_collector.arn
+  description = "The ARN of the IAM role for ADOT Collector"
+}
+
+

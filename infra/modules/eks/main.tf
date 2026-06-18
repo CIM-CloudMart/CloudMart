@@ -46,6 +46,7 @@ module "eks" {
       selectors = [
         { namespace = "kube-system" }
       ]
+      iam_role_additional_policies = {}
     }
     cloudmart = {
       name = "cloudmart"
@@ -53,42 +54,51 @@ module "eks" {
         { namespace = "cloudmart-prod" },
         { namespace = "cloudmart-staging" }
       ]
+      iam_role_additional_policies = {
+        CloudWatchAgentServerPolicy = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+      }
     }
     external_secrets = {
       name = "external-secrets"
       selectors = [
         { namespace = "external-secrets" }
       ]
+      iam_role_additional_policies = {}
     }
     amazon_cloudwatch = {
       name = "amazon-cloudwatch"
       selectors = [
         { namespace = "amazon-cloudwatch" }
       ]
+      iam_role_additional_policies = {}
     }
     kyverno = {
       name = "kyverno"
       selectors = [
         { namespace = "kyverno" }
       ]
+      iam_role_additional_policies = {}
     }
     keda = {
       name = "keda"
       selectors = [
         { namespace = "keda" }
       ]
+      iam_role_additional_policies = {}
     }
     argo_rollouts = {
       name = "argo-rollouts"
       selectors = [
         { namespace = "argo-rollouts" }
       ]
+      iam_role_additional_policies = {}
     }
     monitoring = {
       name = "monitoring"
       selectors = [
         { namespace = "monitoring" }
       ]
+      iam_role_additional_policies = {}
     }
   } : {}
 
@@ -125,6 +135,11 @@ module "eks" {
     amazon-cloudwatch-observability = {
       resolve_conflicts_on_create = "OVERWRITE"
       resolve_conflicts_on_update = "OVERWRITE"
+      configuration_values = jsonencode({
+        otelContainerInsights = {
+          enabled = true
+        }
+      })
     }
     } : {
     coredns    = {}
@@ -133,6 +148,11 @@ module "eks" {
     amazon-cloudwatch-observability = {
       resolve_conflicts_on_create = "OVERWRITE"
       resolve_conflicts_on_update = "OVERWRITE"
+      configuration_values = jsonencode({
+        otelContainerInsights = {
+          enabled = true
+        }
+      })
     }
   }
 
