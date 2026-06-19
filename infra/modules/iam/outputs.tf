@@ -38,4 +38,9 @@ output "adot_collector_role_arn" {
   description = "The ARN of the IAM role for ADOT Collector"
 }
 
+output "cloudwatch_observability_role_arn" {
+  value       = aws_iam_role.cloudwatch_observability.arn
+  description = "The ARN of the IAM role for CloudWatch Observability addon"
+}
+
 
