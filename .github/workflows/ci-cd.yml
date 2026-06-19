@@ -265,6 +265,10 @@ jobs:
       - name: Update Kubeconfig
         run: aws eks update-kubeconfig --name cloudmart --region ap-south-1
 
+      - name: Apply Fargate Logging Configuration
+        run: |
+          kubectl apply -f helm-charts/charts/cloudmart/fargate-logging.yaml
+
       - name: Set up Helm
         uses: azure/setup-helm@v4
         with:
