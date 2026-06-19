@@ -18,6 +18,11 @@ output "user_service_role_arn" {
   description = "The ARN of the IAM role for user-service"
 }
 
+output "user_jwt_role_arn" {
+  value       = aws_iam_role.user_jwt.arn
+  description = "The ARN of the IAM role for user-service JWT key reader"
+}
+
 output "aws_load_balancer_controller_role_arn" {
   value       = aws_iam_role.aws_load_balancer_controller.arn
   description = "The ARN of the IAM role for AWS Load Balancer Controller"
@@ -27,4 +32,10 @@ output "github_actions_role_arn" {
   value       = aws_iam_role.github_actions.arn
   description = "The ARN of the IAM role for GitHub Actions"
 }
+
+output "adot_collector_role_arn" {
+  value       = aws_iam_role.adot_collector.arn
+  description = "The ARN of the IAM role for ADOT Collector"
+}
+
 

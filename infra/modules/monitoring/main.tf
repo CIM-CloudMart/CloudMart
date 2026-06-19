@@ -43,7 +43,7 @@ resource "aws_cloudwatch_log_metric_filter" "product_service_requests" {
 
   metric_transformation {
     name      = "RequestCount"
-    namespace = "CloudMart/product-service"
+    namespace = "CloudMart/product-service-${var.environment}"
     value     = "1"
   }
 }
@@ -56,7 +56,7 @@ resource "aws_cloudwatch_log_metric_filter" "product_service_errors" {
 
   metric_transformation {
     name      = "ErrorCount"
-    namespace = "CloudMart/product-service"
+    namespace = "CloudMart/product-service-${var.environment}"
     value     = "1"
   }
 }
@@ -81,7 +81,7 @@ resource "aws_cloudwatch_metric_alarm" "product_service_high_error_rate" {
     id = "errors"
     metric {
       metric_name = "ErrorCount"
-      namespace   = "CloudMart/product-service"
+      namespace   = "CloudMart/product-service-${var.environment}"
       period      = 300
       stat        = "Sum"
     }
@@ -91,7 +91,7 @@ resource "aws_cloudwatch_metric_alarm" "product_service_high_error_rate" {
     id = "requests"
     metric {
       metric_name = "RequestCount"
-      namespace   = "CloudMart/product-service"
+      namespace   = "CloudMart/product-service-${var.environment}"
       period      = 300
       stat        = "Sum"
     }
@@ -150,12 +150,11 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            ["ContainerInsights", "pod_cpu_utilization", "ClusterName", "cloudmart-eks-${var.environment}", "Namespace", "cloudmart-${var.environment}"]
+            [ { "expression" = "SEARCH('{ContainerInsights,ClusterName,Namespace,PodName} ClusterName=\"${var.project}\" Namespace=\"cloudmart-${var.environment}\" pod_cpu_utilization', 'Average', 300)", "id" = "e1" } ]
           ],
           period = 300,
-          stat   = "Average",
           region = data.aws_region.current.region,
-          title  = "Pod CPU Utilization (%)"
+          title  = "Pod CPU Utilization (%) per Service"
         }
       },
       {
@@ -166,12 +165,11 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            ["ContainerInsights", "pod_memory_utilization", "ClusterName", "cloudmart-eks-${var.environment}", "Namespace", "cloudmart-${var.environment}"]
+            [ { "expression" = "SEARCH('{ContainerInsights,ClusterName,Namespace,PodName} ClusterName=\"${var.project}\" Namespace=\"cloudmart-${var.environment}\" pod_memory_utilization', 'Average', 300)", "id" = "e2" } ]
           ],
           period = 300,
-          stat   = "Average",
           region = data.aws_region.current.region,
-          title  = "Pod Memory Utilization (%)"
+          title  = "Pod Memory Utilization (%) per Service"
         }
       },
       {
@@ -247,7 +245,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            ["CloudMart/product-service", "ErrorCount", "Environment", var.environment]
+            ["CloudMart/product-service-${var.environment}", "ErrorCount"]
           ],
           period = 300,
           stat   = "Sum",

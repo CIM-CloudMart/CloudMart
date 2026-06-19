@@ -37,7 +37,7 @@ variable "single_nat_gateway" {
 variable "from_email" {
   description = "SES sender email"
   type        = string
-  default     = "no-reply@cloudmart.com"
+  default     = "tradeasy.official01@gmail.com"
 }
 
 variable "use_fargate" {
