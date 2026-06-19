@@ -181,6 +181,15 @@ data "aws_iam_policy_document" "notification_service_policy" {
     ]
     resources = ["*"]
   }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "dynamodb:PutItem",
+      "dynamodb:GetItem"
+    ]
+    resources = [var.dynamodb_events_table_arn]
+  }
 }
 
 resource "aws_iam_role_policy" "notification_service" {
