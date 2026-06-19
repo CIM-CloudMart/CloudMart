@@ -132,28 +132,10 @@ module "eks" {
         computeType = "Fargate"
       })
     }
-    amazon-cloudwatch-observability = {
-      resolve_conflicts_on_create = "OVERWRITE"
-      resolve_conflicts_on_update = "OVERWRITE"
-      configuration_values = jsonencode({
-        otelContainerInsights = {
-          enabled = true
-        }
-      })
-    }
     } : {
     coredns    = {}
     kube-proxy = {}
     vpc-cni    = {}
-    amazon-cloudwatch-observability = {
-      resolve_conflicts_on_create = "OVERWRITE"
-      resolve_conflicts_on_update = "OVERWRITE"
-      configuration_values = jsonencode({
-        otelContainerInsights = {
-          enabled = true
-        }
-      })
-    }
   }
 
   access_entries = {

@@ -190,3 +190,5 @@ resource "aws_eks_access_policy_association" "github_actions" {
   }
   depends_on    = [module.iam]
 }
+
+
