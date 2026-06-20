@@ -186,44 +186,6 @@ jobs:
           docker push "${ECR_REPO}:latest"
           docker push "${ECR_REPO}:${ENV_SHORT}"
 
-      - name: Force ECR Pruning (retaining only last 10 images)
-        env:
-          ENV_SHORT: ${{ steps.vars.outputs.env_short }}
-          SERVICE: ${{ matrix.service }}
-        run: |
-          REPO="cloudmart-${SERVICE}-${ENV_SHORT}"
-          echo "Forcing ECR image pruning for ${REPO}..."
-          
-          # List all image digests sorted by push time (oldest first)
-          IMAGES=$(aws ecr describe-images \
-            --repository-name "${REPO}" \
-            --region ap-south-1 \
-            --query 'imageDetails | sort_by(@, &imagePushedAt) | [*].imageDigest' \
-            --output text)
-          
-          COUNT=$(echo $IMAGES | wc -w)
-          echo "Current total unique images: ${COUNT}"
-          
-          if [ "${COUNT}" -gt 10 ]; then
-            LIMIT=10
-            TO_DELETE_COUNT=$((COUNT - LIMIT))
-            echo "Pruning ${TO_DELETE_COUNT} older images to enforce the limit..."
-            
-            # Since the query output is oldest first, head gets the oldest digests to delete
-            TO_DELETE=$(echo $IMAGES | tr ' ' '\n' | head -n "${TO_DELETE_COUNT}")
-            
-            for DIGEST in $TO_DELETE; do
-              echo "Pruning image digest: ${DIGEST}"
-              aws ecr batch-delete-image \
-                --repository-name "${REPO}" \
-                --region ap-south-1 \
-                --image-ids "imageDigest=${DIGEST}"
-            done
-            echo "Successfully pruned ECR repository down to exactly 10 images."
-          else
-            echo "Repository has ${COUNT} images (<= 10). No pruning required."
-          fi
-
 # JOB 4 – Deploy (approval gate is handled by the 'production' environment protection rule)
   deploy:
     name: Deploy to ${{ github.ref == 'refs/heads/main' && 'Production' || 'Staging' }}
