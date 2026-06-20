@@ -186,24 +186,11 @@ jobs:
           docker push "${ECR_REPO}:latest"
           docker push "${ECR_REPO}:${ENV_SHORT}"
 
-# JOB 4 – Manual Approval Gate production only
-  approval:
-    name: Production Approval Gate
-    needs: [build-scan-push]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - name: Await manual approval
-        run: echo "✅ Production deployment approved."
-
+# JOB 4 – Deploy (approval gate is handled by the 'production' environment protection rule)
   deploy:
     name: Deploy to ${{ github.ref == 'refs/heads/main' && 'Production' || 'Staging' }}
-    needs: [build-scan-push, approval]
-    if: |
-      always() &&
-      needs.build-scan-push.result == 'success' &&
-      (needs.approval.result == 'success' || needs.approval.result == 'skipped')
+    needs: [build-scan-push]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
     steps:
