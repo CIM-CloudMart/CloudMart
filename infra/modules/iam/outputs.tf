@@ -43,4 +43,10 @@ output "cloudwatch_observability_role_arn" {
   description = "The ARN of the IAM role for CloudWatch Observability addon"
 }
 
+output "keda_operator_role_arn" {
+  value       = aws_iam_role.keda_operator.arn
+  description = "The ARN of the IAM role for KEDA operator"
+}
+
+
 
