@@ -221,9 +221,9 @@ Our group used the following AI tools during this project:
 
 | Tool | Tasks | Review Process |
 |------|-------|----------------|
-| **Antigravity (Google DeepMind)** | Debugging infrastructure code, fixing Terraform deployment failures, resolving Kubernetes/Helm issues, troubleshooting CI/CD pipeline errors, and iterating on configuration files | All AI-suggested fixes were reviewed manually, tested in a staging environment, and verified against expected outputs before being merged |
-| **ChatGPT (OpenAI)** | Learning AWS concepts, generating AWS CLI commands, understanding AWS service configurations (EKS, ECR, SQS, DynamoDB, SES), and debugging AWS CLI errors | Commands and explanations were cross-referenced with the official AWS documentation before being applied to the project |
-| **Claude (Anthropic)** | Generating prompts, learning AWS architecture best practices, researching IAM policies, and understanding AWS CLI command syntax and debugging | Output was reviewed against AWS official docs and tested in a sandboxed AWS environment before use in production |
+| **Antigravity** | Debugging infrastructure code, fixing Terraform deployment failures, resolving Kubernetes/Helm issues, troubleshooting CI/CD pipeline errors, and iterating on configuration files | All AI-suggested fixes were reviewed manually, tested in a staging environment, and verified against expected outputs before being merged |
+| **ChatGPT** | Learning AWS concepts, generating AWS CLI commands, understanding AWS service configurations (EKS, ECR, SQS, DynamoDB, SES), and debugging AWS CLI errors | Commands and explanations were cross-referenced with the official AWS documentation before being applied to the project |
+| **Claude** | Generating prompts, learning AWS architecture best practices, researching IAM policies, and understanding AWS CLI command syntax and debugging | Output was reviewed against AWS official docs and tested in a sandboxed AWS environment before use in production |
 
 All AI-generated content was reviewed, tested, and validated by the team before inclusion in the codebase or infrastructure. No AI output was used without human oversight and verification.
 
