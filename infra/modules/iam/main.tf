@@ -554,5 +554,91 @@ resource "aws_iam_role_policy_attachment" "adot_collector_cloudwatch" {
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
 
+# ==================== CloudWatch Observability IAM Role ====================
 
+data "aws_iam_policy_document" "cloudwatch_observability_assume_role" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    effect  = "Allow"
 
+    principals {
+      type        = "Federated"
+      identifiers = ["arn:${local.partition}:iam::${local.account_id}:oidc-provider/${local.oidc_provider}"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider}:sub"
+      values   = ["system:serviceaccount:amazon-cloudwatch:cloudwatch-agent"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "cloudwatch_observability" {
+  name               = "${var.project}-cloudwatch-obs-role-${var.environment}"
+  assume_role_policy = data.aws_iam_policy_document.cloudwatch_observability_assume_role.json
+}
+
+resource "aws_iam_role_policy_attachment" "cloudwatch_observability" {
+  role       = aws_iam_role.cloudwatch_observability.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
+# ==================== KEDA Operator IAM Role ====================
+
+data "aws_iam_policy_document" "keda_operator_assume_role" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    effect  = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = ["arn:${local.partition}:iam::${local.account_id}:oidc-provider/${local.oidc_provider}"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider}:sub"
+      values = [
+        "system:serviceaccount:keda:keda-operator",
+        "system:serviceaccount:keda:keda-metrics-server"
+      ]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "keda_operator" {
+  name               = "${var.project}-keda-operator-role-${var.environment}"
+  assume_role_policy = data.aws_iam_policy_document.keda_operator_assume_role.json
+}
+
+data "aws_iam_policy_document" "keda_operator_policy" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "sqs:GetQueueAttributes",
+      "sqs:GetQueueUrl"
+    ]
+    resources = [
+      "arn:aws:sqs:${var.region}:${local.account_id}:cloudmart-order-events-*"
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "keda_operator" {
+  name   = "${var.project}-keda-operator-policy-${var.environment}"
+  role   = aws_iam_role.keda_operator.id
+  policy = data.aws_iam_policy_document.keda_operator_policy.json
+}

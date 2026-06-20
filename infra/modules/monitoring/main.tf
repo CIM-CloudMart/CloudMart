@@ -150,7 +150,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            [ { "expression" = "SEARCH('{ContainerInsights,ClusterName,Namespace,PodName} ClusterName=\"${var.project}\" Namespace=\"cloudmart-${var.environment}\" pod_cpu_utilization', 'Average', 300)", "id" = "e1" } ]
+            [{ "expression" = "SEARCH('{ContainerInsights,ClusterName,Namespace,PodName,LaunchType} ClusterName=\"${var.project}\" Namespace=\"cloudmart-${var.environment}\" pod_cpu_utilization_over_pod_limit', 'Average', 300)", "id" = "e1" }]
           ],
           period = 300,
           region = data.aws_region.current.region,
@@ -165,7 +165,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         height = 6
         properties = {
           metrics = [
-            [ { "expression" = "SEARCH('{ContainerInsights,ClusterName,Namespace,PodName} ClusterName=\"${var.project}\" Namespace=\"cloudmart-${var.environment}\" pod_memory_utilization', 'Average', 300)", "id" = "e2" } ]
+            [{ "expression" = "SEARCH('{ContainerInsights,ClusterName,Namespace,PodName,LaunchType} ClusterName=\"${var.project}\" Namespace=\"cloudmart-${var.environment}\" pod_memory_utilization_over_pod_limit', 'Average', 300)", "id" = "e2" }]
           ],
           period = 300,
           region = data.aws_region.current.region,
